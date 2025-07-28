@@ -8,75 +8,70 @@ from typing import List, Optional
 from groq import Groq
 
 # ----------------------------------------------------------------------
-# 1. Groq API Key Setup (스크립트 시작 시 API 키 처리)
+# 1. Groq API Key Setup (Handle API Key at script start)
 # ----------------------------------------------------------------------
 _groq_api_key_global: Optional[str] = os.getenv("GROQ_API_KEY")
 
 if not _groq_api_key_global:
-    print("⚠️ GROQ_API_KEY 환경 변수가 설정되지 않았습니다.")
-    user_choice = input("Groq API 키를 직접 입력하여 진행하시겠습니까? (y/n): ").strip().lower()
+    print("⚠️ GROQ_API_KEY environment variable is not set.")
+    user_choice = input("Do you want to proceed by entering your Groq API key directly? (y/n): ").strip().lower()
     if user_choice == 'y':
-        _groq_api_key_global = getpass.getpass("🔐 Groq API 키를 입력하세요 (입력값은 숨겨집니다): ").strip()
+        _groq_api_key_global = getpass.getpass("🔐 Enter your Groq API key (input will be hidden): ").strip()
         if not _groq_api_key_global:
-            print("API 키가 입력되지 않았습니다. 프로그램을 종료합니다.")
+            print("No API key entered. Exiting program.")
             exit(1)
     else:
-        print("API 키 없이는 진행할 수 없습니다. 프로그램을 종료합니다.")
+        print("Cannot proceed without an API key. Exiting program.")
         exit(1)
 
 try:
     _groq_client_global = Groq(api_key=_groq_api_key_global)
-    print("✅ Groq 클라이언트가 성공적으로 초기화되었습니다.")
+    print("✅ Groq client initialized successfully.")
 except Exception as e:
-    print(f"❌ Groq 클라이언트 초기화 중 오류 발생: {e}")
-    print("제공된 API 키가 유효하지 않거나 연결 문제가 발생했습니다. 프로그램을 종료합니다.")
+    print(f"❌ Error initializing Groq client: {e}")
+    print("The provided API key might be invalid or there's a connection issue. Exiting program.")
     exit(1)
 
 
 # ----------------------------------------------------------------------
-# 2. ExecutionSummarizer Class (전역 Groq 클라이언트 사용)
+# 2. ExecutionSummarizer Class (Using global Groq client)
 # ----------------------------------------------------------------------
 class ExecutionSummarizer:
     """
-    스마트 컨트랙트 배포 및 실행 로그를 자연어 요약으로 변환하는 클래스입니다.
-    Groq API를 사용하여 빠르고 효율적인 AI 요약을 수행합니다.
+    A class that converts smart contract deployment and execution logs into natural language summaries.
+    It uses the Groq API for fast and efficient AI summarization.
     """
     def __init__(self, model_name: str = "llama3-8b-8192"):
-        print(f"🛠️ ExecutionSummarizer 초기화 중. Groq 모델: '{model_name}' 설정 중...")
+        print(f"🛠️ Initializing ExecutionSummarizer. Setting Groq model: '{model_name}'...")
         self.client = _groq_client_global
         self.model_name = model_name
-        print("✅ ExecutionSummarizer 초기화 완료. Groq 클라이언트 준비됨.")
+        print("✅ ExecutionSummarizer initialization complete. Groq client ready.")
 
-    def summarize(self, logs: List[str], max_tokens: int = 220, language: str = "ko") -> str: # max_tokens, language 추가
+    def summarize(self, logs: List[str], max_tokens: int = 220) -> str: # Removed language parameter
         """
-        제공된 로그 리스트를 기반으로 Groq API를 사용하여 요약 텍스트를 생성합니다.
+        Generates a summary text using the Groq API based on the provided list of logs.
+        The summary will always be in English.
 
         Args:
-            logs (List[str]): 요약할 로그 메시지들의 리스트.
-            max_tokens (int): 생성될 요약문의 최대 토큰 수. (기본값: 220)
-            language (str): 요약문의 언어 ('ko' for Korean, 'en' for English). (기본값: 'ko')
+            logs (List[str]): A list of log messages to summarize.
+            max_tokens (int): The maximum number of tokens for the generated summary. (Default: 220)
 
         Returns:
-            str: 요약된 텍스트.
+            str: The summarized text.
         """
         if not logs:
-            return "제공된 실행 로그가 없습니다." if language == "ko" else "No execution logs provided."
+            return "No execution logs provided."
 
         full_text = "\n".join(logs)
 
-        # 시스템 프롬프트: 핵심 정보를 포함하도록 강화 (언어 선택 가능)
+        # System prompt: Enhanced to include key information
         system_prompt = (
             "You are an AI assistant specialized in summarizing smart contract deployment and execution logs. "
             "Provide a concise, clear, and informative summary of the given logs. "
             "Highlight key actions, results, **and include all significant numerical values (e.g., token supply, amounts, addresses, transaction hashes) explicitly in the summary.** "
-            "Keep it brief and to the point."
+            "Keep it brief and to the point. The summary must be in English." # Enforced English
         )
-        if language == "ko":
-            system_prompt += " The summary must be in Korean."
-            user_prompt_prefix = "다음 스마트 컨트랙트 실행 로그를 요약해주세요:\n\n"
-        else: # Default to English
-            system_prompt += " The summary must be in English."
-            user_prompt_prefix = "Please summarize the following smart contract execution logs:\n\n"
+        user_prompt_prefix = "Please summarize the following smart contract execution logs:\n\n"
 
 
         messages = [
@@ -84,32 +79,32 @@ class ExecutionSummarizer:
             {"role": "user", "content": f"{user_prompt_prefix}{full_text}"}
         ]
 
-        print("🔄 Groq API를 사용하여 실행 로그 요약 중...")
+        print("🔄 Summarizing execution logs using Groq API...")
         try:
             chat_completion = self.client.chat.completions.create(
                 messages=messages,
                 model=self.model_name,
                 temperature=0.7,
-                max_tokens=max_tokens, # 늘어난 max_tokens 적용
+                max_tokens=max_tokens, # Apply increased max_tokens
             )
             summary_text = chat_completion.choices[0].message.content.strip()
-            print(f"✅ Groq API를 통한 로그 요약 성공.")
+            print(f"✅ Log summarization via Groq API successful.")
             return summary_text
         except Exception as e:
-            print(f"❌ Groq API 호출 중 오류 발생: {e}")
-            return f"로그 요약 실패: {e}" if language == "ko" else f"Log summarization failed: {e}"
+            print(f"❌ Error calling Groq API: {e}")
+            return f"Log summarization failed: {e}"
 
 
 # ----------------------------------------------------------------------
-# 3. Usage Example (메인 실행 블록)
+# 3. Usage Example (Main execution block)
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-    print("\n--- ExecutionSummarizer (Groq) 테스트 스크립트 시작 ---")
+    print("\n--- ExecutionSummarizer (Groq) Test Script Start ---")
 
     try:
         summarizer = ExecutionSummarizer()
 
-        # 테스트 로그 데이터 1: ERC20 배포 및 초기 민팅
+        # Test Log Data 1: ERC20 Deployment and Initial Minting
         test_logs_erc20 = [
             "Contract template 'ERC20' selected.",
             "Compiling ERC20 contract: 'MyToken' with symbol 'MTK'.",
@@ -122,7 +117,7 @@ if __name__ == "__main__":
             "Initial supply (1000 MTK) minted to deployer address."
         ]
 
-        # 테스트 로그 데이터 2: SimpleStorage 값 설정
+        # Test Log Data 2: SimpleStorage Value Setting
         test_logs_simple_storage = [
             "Contract template 'SimpleStorage' selected.",
             "Compiling SimpleStorage contract.",
@@ -133,44 +128,43 @@ if __name__ == "__main__":
             "Event 'DataStored' emitted with value 123."
         ]
 
-        # 테스트 로그 데이터 3: 오류 시나리오 (가상)
+        # Test Log Data 3: Error Scenario (simulated)
         test_logs_error = [
             "Contract template 'InvalidContract' selected.",
             "Compilation failed: Syntax error on line 5.",
             "Deployment aborted due to compilation error."
         ]
 
-        print("\n[테스트: ERC20 배포 및 초기 민팅 로그 요약 (한국어)]")
-        summary_erc20_ko = summarizer.summarize(test_logs_erc20, language="ko")
-        print("생성된 요약:\n", summary_erc20_ko)
-        # ✅ 1) 테스트 조건을 유연하게 변경 (assert 완화)
-        # ✅ 2) Groq에 강하게 프롬프트 주기 (모델이 '1000 MTK'를 포함할 가능성 높임)
-        # 따라서 이제 "1000 MTK"가 없더라도 테스트는 통과할 수 있지만, 프롬프트 강화로 포함될 확률 높음.
-        assert "erc20" in summary_erc20_ko.lower() and "배포" in summary_erc20_ko.lower(), \
-               "ERC20 요약에 예상 키워드(한국어)가 포함되지 않았습니다."
-        print("✅ ERC20 로그 요약 테스트 성공.")
+        print("\n[Test: ERC20 Deployment and Initial Minting Log Summary]")
+        summary_erc20 = summarizer.summarize(test_logs_erc20) # No language arg needed
+        print("Generated Summary:\n", summary_erc20)
+        # Flexible test conditions (loosened assert)
+        # Stronger prompt for Groq (increases likelihood of model including '1000 MTK')
+        assert "erc20" in summary_erc20.lower() and ("deploy" in summary_erc20.lower() or "deployed" in summary_erc20.lower()), \
+               "ERC20 summary does not contain expected keywords."
+        print("✅ ERC20 Log Summary Test Successful.")
 
-        print("\n[테스트: SimpleStorage 값 설정 로그 요약 (영어)]")
-        summary_simple_storage_en = summarizer.summarize(test_logs_simple_storage, language="en")
-        print("생성된 요약:\n", summary_simple_storage_en)
-        assert "simplestorage" in summary_simple_storage_en.lower() and "123" in summary_simple_storage_en, \
+        print("\n[Test: SimpleStorage Value Setting Log Summary]")
+        summary_simple_storage = summarizer.summarize(test_logs_simple_storage) # No language arg needed
+        print("Generated Summary:\n", summary_simple_storage)
+        assert "simplestorage" in summary_simple_storage.lower() and "123" in summary_simple_storage, \
                "SimpleStorage summary does not contain expected keywords."
-        print("✅ SimpleStorage 로그 요약 테스트 성공.")
+        print("✅ SimpleStorage Log Summary Test Successful.")
 
-        print("\n[테스트: 오류 시나리오 로그 요약 (한국어)]")
-        summary_error_ko = summarizer.summarize(test_logs_error, language="ko")
-        print("생성된 요약:\n", summary_error_ko)
-        assert "실패" in summary_error_ko or "오류" in summary_error_ko, \
-               "오류 시나리오 요약에 예상 키워드(한국어)가 포함되지 않았습니다."
-        print("✅ 오류 로그 요약 테스트 성공.")
+        print("\n[Test: Error Scenario Log Summary]")
+        summary_error = summarizer.summarize(test_logs_error) # No language arg needed
+        print("Generated Summary:\n", summary_error)
+        assert "fail" in summary_error.lower() or "error" in summary_error.lower(), \
+               "Error scenario summary does not contain expected keywords."
+        print("✅ Error Log Summary Test Successful.")
 
-        print("\n[테스트: 빈 로그 요약 (한국어)]")
-        summary_empty_ko = summarizer.summarize([])
-        print("생성된 요약:\n", summary_empty_ko)
-        assert "제공된 실행 로그가 없습니다." in summary_empty_ko
-        print("✅ 빈 로그 요약 테스트 성공.")
+        print("\n[Test: Empty Log Summary]")
+        summary_empty = summarizer.summarize([]) # No language arg needed
+        print("Generated Summary:\n", summary_empty)
+        assert "no execution logs provided." in summary_empty.lower()
+        print("✅ Empty Log Summary Test Successful.")
 
     except Exception as e:
-        print(f"❌ ExecutionSummarizer 테스트 중 예상치 못한 오류 발생: {e}")
+        print(f"❌ An unexpected error occurred during ExecutionSummarizer test: {e}")
 
-    print("\n--- ExecutionSummarizer (Groq) 테스트 스크립트 종료 ---")
+    print("\n--- ExecutionSummarizer (Groq) Test Script End ---")
