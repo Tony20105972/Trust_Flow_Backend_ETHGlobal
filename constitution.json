@@ -1,0 +1,39 @@
+{
+  "rules": [
+    {
+      "name": "Output must exist",
+      "description": "Every agent flow must generate some output to be valid.",
+      "condition": "'step3' in result or 'deploy_result' in result"
+    },
+    {
+      "name": "No selfdestruct",
+      "description": "Smart contracts must not contain the selfdestruct opcode.",
+      "condition": "'selfdestruct' not in solidity_code"
+    },
+    {
+      "name": "No tx.origin for auth",
+      "description": "Smart contracts must not use tx.origin for authentication (use msg.sender instead).",
+      "condition": "'tx.origin' not in solidity_code"
+    },
+    {
+      "name": "Safe math operations",
+      "description": "Smart contracts must use safe math libraries or Solidity ^0.8.0 built-in overflow checks.",
+      "condition": "'^0.8' in solidity_code or 'SafeMath' in solidity_code"
+    },
+    {
+      "name": "DAO proposals must be descriptive",
+      "description": "All DAO proposals must include a title and description for transparency.",
+      "condition": "'title' in proposal and 'description' in proposal"
+    },
+    {
+      "name": "Wallet address must be valid",
+      "description": "Any action (deploy, swap, DAO vote) must include a valid wallet address.",
+      "condition": "wallet is not None and wallet.startswith('0x')"
+    },
+    {
+      "name": "ZK & Oracle mentions",
+      "description": "If zk or oracle is referenced, contracts must log these actions for auditability.",
+      "condition": "('zk' not in solidity_code) or ('emit' in solidity_code)"
+    }
+  ]
+}
