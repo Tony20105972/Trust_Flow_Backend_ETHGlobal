@@ -1,0 +1,36 @@
+Smart Contract Templates
+This directory contains simplified Solidity smart contract templates designed for quick deployment and demonstration within the TrustFlow backend. These templates serve as a foundational library for the AI agent to generate and deploy contracts based on user requests.
+
+Purpose
+Rapid Prototyping: Provides ready-to-use contract structures for hackathon demonstrations.
+
+AI-Driven Generation: Serves as a base for the template_mapper.py module, allowing the AI to select and customize contracts based on specific conditions (e.g., creating an ERC20 token, setting up an auction).
+
+Modularity: Each .sol file represents a single, focused contract, making it easy to understand and extend.
+
+Contract Files Overview
+SimpleConditional.sol: A basic contract demonstrating conditional logic. Useful for scenarios where a specific condition must be met for an action to occur.
+
+DutchAuction.sol: Implements a simplified Dutch Auction mechanism, where the price decreases over time.
+
+ERC20Token.sol: A minimal implementation of an ERC20 fungible token. It includes core functionalities like name, symbol, totalSupply, balanceOf, and transfer.
+
+ERC721NFT.sol: A simple non-fungible token (NFT) contract, demonstrating basic minting functionality.
+
+DAOProposal.sol: A very basic contract for managing DAO proposals and votes, illustrating on-chain governance concepts.
+
+Integration with template_mapper.py
+The template_mapper.py module is designed to interact with these files. It can:
+
+Read the content of these .sol files.
+
+Based on AI-determined requirements or user input, select the most appropriate template.
+
+Potentially inject dynamic values (e.g., token names, initial supplies) into the template before compilation and deployment.
+
+Future Expansion
+While these templates are simplified for MVP purposes, they can be easily extended:
+
+OpenZeppelin Integration: For production-ready contracts, these templates can be replaced with or inherit from robust OpenZeppelin Contracts, providing battle-tested security and features.
+
+More Complex Logic: Additional functionalities (e.g., pausing, role-based access control, advanced DeFi mechanisms) can be added to existing templates or new templates can be created.
