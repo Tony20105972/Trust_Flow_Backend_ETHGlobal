@@ -1,0 +1,17 @@
+{
+  "etherlink_ghostnet": {
+    "chain_id": 128123,
+    "rpc_url": "https://node.ghostnet.etherlink.com",
+    "explorer_url": "https://ghostnet.explorer.etherlink.com"
+  },
+  "polygon_mainnet": {
+    "chain_id": 137,
+    "rpc_url": "https://polygon-rpc.com",
+    "explorer_url": "https://polygonscan.com"
+  },
+  "ethereum_mainnet": {
+    "chain_id": 1,
+    "rpc_url": "https://eth.llamarpc.com",
+    "explorer_url": "https://etherscan.io"
+  }
+}
