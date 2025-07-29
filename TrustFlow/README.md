@@ -3,7 +3,6 @@
 
 ## 📄 **README.md (영어 + 한국어)**
 
-```markdown
 # 🌐 TrustFlow Backend – ETHGlobal Hackathon Project
 
 **TrustFlow** is an AI-powered **Web3 Contract & Compliance Engine** built for **ETHGlobal Unite DeFi**.  
