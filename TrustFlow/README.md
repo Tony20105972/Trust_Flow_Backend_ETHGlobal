@@ -1,7 +1,7 @@
 
 ---
 
-## 📄 **README.md (영어 + 한국어)**
+## 📄 **README.md (English + Korean)**
 
 # 🌐 TrustFlow Backend – ETHGlobal Hackathon Project
 
