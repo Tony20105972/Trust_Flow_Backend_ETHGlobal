@@ -1,0 +1,13 @@
+# config/config.yaml
+
+rpc:
+  etherlink_ghostnet: "https://node.ghostnet.etherlink.com"
+  polygon_mainnet: "https://polygon-rpc.com"
+  ethereum_mainnet: "https://eth.llamarpc.com"
+
+api_keys:
+  oneinch: "YOUR_1INCH_API_KEY_HERE"
+  ipfs: "YOUR_IPFS_API_KEY_HERE"
+
+settings:
+  default_gas_limit: 2000000   # 해커톤용 안전 마진
