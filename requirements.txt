@@ -11,3 +11,6 @@ pytest
 
 # ✅ Add this line
 setuptools>=70.0.0
+
+python-multipart
+
