@@ -1,7 +1,7 @@
-# trustflow/main.py
+# TrustFlow/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from trustflow import api  # api.py 라우터 임포트
+from TrustFlow import api  # api.py 라우터 임포트
 
 app = FastAPI(
     title="TrustFlow Backend",
