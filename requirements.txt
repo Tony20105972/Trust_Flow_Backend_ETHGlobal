@@ -1,23 +1,13 @@
-# requirements.txt
-# Install all packages with: pip install -r requirements.txt
+# ✅ 최소 구성 requirements.txt (Render 배포용)
 
-# Web Framework
-fastapi~=0.111.0
-uvicorn~=0.30.1   # ✅ [standard] 제거
+fastapi
+uvicorn
 
-# Web3 & Blockchain Interaction
-web3~=5.31.3                # ✅ Downgraded for ExtraDataToPOAMiddleware
-py-solc-x~=1.1.1            # Solidity compiler wrapper
+web3==5.31.3      # ExtraDataToPOAMiddleware 위해 5.x 고정
+py-solc-x         # Solidity compiler
 
-# Environment & Config
-python-dotenv~=1.0.0        # Load env vars from .env
-PyYAML~=6.0.1               # Parse config.yaml
+groq              # Groq API client
 
-# AI / LLM Integration
-groq~=0.9.0                 # ✅ Groq API client (new)
+requests          # API 호출용 (IPFS 등)
 
-# HTTP & IPFS
-requests~=2.32.3            # For IPFS / API calls
-
-# Testing
-pytest~=8.2.2               # Unit testing
+# 선택: 테스트 필요 없으면 pytest 삭제 가능
