@@ -1,10 +1,10 @@
-# trustflow/api.py
+# TrustFlow/api.py
 from fastapi import APIRouter, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional
 
 # 백엔드 모듈 임포트
-from trustflow import (
+from TrustFlow import (
     generate_contract, template_mapper, rule_checker,
     deploy_manager, dao_manager, zk_oracle_detector,
     ipfs_uploader, oneinch_api
@@ -59,7 +59,7 @@ async def create_proposal(req: ProposalRequest):
 
 class VoteRequest(BaseModel):
     proposal_id: int
-    vote: str   # "for" or "against"
+    vote: str    # "for" or "against"
     wallet_address: Optional[str] = None
 
 @router.post("/dao/vote")
