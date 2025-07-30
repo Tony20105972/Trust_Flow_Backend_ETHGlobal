@@ -1,0 +1,30 @@
+# render.yaml
+# Render.com Deployment Spec
+# https://render.com/docs/yaml-spec
+
+services:
+  - type: web
+    name: trustflow-backend        # 🔹 서비스 이름 (대시보드에 표시)
+    env: python
+    pythonVersion: 3.10.12         # ✅ 안정적 버전 명시 (Solidity & Web3 패키지 호환)
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn trustflow.main:app --host 0.0.0.0 --port $PORT
+    # ⚠️ app 경로 반드시 확인 (trustflow/main.py 안에 app = FastAPI() 있어야 함)
+
+    envVars:
+      # ✅ 민감정보 (Render 대시보드에서 직접 입력!)
+      - key: PRIVATE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: IPFS_API_KEY
+        sync: false
+
+      # ➕ 향후 확장용 (Supabase, DB, 1inch API 등)
+      # - key: SUPABASE_URL
+      #   sync: false
+      # - key: SUPABASE_KEY
+      #   sync: false
