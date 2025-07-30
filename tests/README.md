@@ -73,6 +73,4 @@ We use **`pytest`** as our testing framework.
 When adding new features or fixing bugs, please ensure you add corresponding unit tests in the appropriate file within this directory. Follow the existing patterns for test functions and fixtures.
 
 ---
-이제 `tests/` 폴더에 이 `README.md` 파일을 추가해 주시면 됩니다.
 
-다음으로, `requirements.txt`에 `pytest`를 포함하여 필요한 Python 종속성들을 정의할 차례일까요?
