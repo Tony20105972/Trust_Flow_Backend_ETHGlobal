@@ -1,13 +1,13 @@
-# ✅ 최소 구성 requirements.txt (Render 배포용)
-
+# requirements.txt
 fastapi
 uvicorn
+web3
+py-solc-x
+python-dotenv
+PyYAML
+groq
+requests
+pytest
 
-web3==5.31.3      # ExtraDataToPOAMiddleware 위해 5.x 고정
-py-solc-x         # Solidity compiler
-
-groq              # Groq API client
-
-requests          # API 호출용 (IPFS 등)
-
-# 선택: 테스트 필요 없으면 pytest 삭제 가능
+# ✅ Add this line
+setuptools>=70.0.0
