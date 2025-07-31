@@ -127,13 +127,13 @@ class IPFSUploader:
 
         Args:
             file_path (str): The path to the file to upload.
-            pin_name (Optional[str]): An optional name for the pin in Pinata's dashboard.
+            pin_name (Optional[str]): An optional name for the pin in Pinata's dashboard.<br>
 
         Returns:
-            str: The IPFS CID (IpfsHash) of the uploaded file.
+            str: The IPFS CID (IpfsHash) of the uploaded file.<br>
 
         Raises:
-            FileNotFoundError: If the specified file path does not exist.
+            FileNotFoundError: If the specified file path does not exist.<br>
             Exception: If an error occurs during the IPFS file upload.
         """
         if self.is_dummy_mode:
@@ -202,11 +202,11 @@ if __name__ == "__main__":
     # 3. Create a new key. You will get both an API Key and a Secret API Key. Copy them.
     # 4. Set them as environment variables or Colab secrets.
     #    Example for environment variables (Bash/Zsh):
-    #    export PINATA_API_KEY="YOUR_ACTUAL_PINATA_API_KEY_HERE"
+    #    export PINATA_API_KEY="YOUR_ACTUAL_PINATA_API_KEY_HERE"<br>
     #    export PINATA_SECRET_API_KEY="YOUR_ACTUAL_PINATA_SECRET_API_KEY_HERE"
     #    Then run your script from the same terminal.
     #    For Windows (PowerShell):
-    #    $env:PINATA_API_KEY="YOUR_ACTUAL_PINATA_API_KEY_HERE"
+    #    $env:PINATA_API_KEY="YOUR_ACTUAL_PINATA_API_KEY_HERE"<br>
     #    $env:PINATA_SECRET_API_KEY="YOUR_ACTUAL_PINATA_SECRET_API_KEY_HERE"
     #    For Google Colab: Go to the "Secrets" tab (key icon) on the left sidebar
     #    and add two new secrets:
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     #    Make sure "Notebook access" is enabled for both secrets.
 
     try:
-        uploader = IPFSUploader() # Attempts to load keys from environment variables/Colab secrets
+        uploader_test = IPFSUploader() # Use a different name for test instance
 
         # Test JSON data for contract report
         test_contract_report_data = {
@@ -232,7 +232,7 @@ if __name__ == "__main__":
 
         print("\n[Test: JSON Data Upload for Contract Report]")
         # pin_name helps identify the pin in Pinata's web UI.
-        ipfs_cid_contract_report = uploader.upload_json(test_contract_report_data, pin_name="ContractReport-ETHGlobalSeoul")
+        ipfs_cid_contract_report = uploader_test.upload_json(test_contract_report_data, pin_name="ContractReport-ETHGlobalSeoul")
         print(f"Generated IPFS CID (Contract Report JSON): {ipfs_cid_contract_report}")
         # Pinata's general gateway link
         print(f"Pinata Gateway Link (Contract Report): https://gateway.pinata.cloud/ipfs/{ipfs_cid_contract_report}")
@@ -250,7 +250,7 @@ if __name__ == "__main__":
             ]
         }
         print("\n[Test: NFT Metadata Upload]")
-        ipfs_cid_nft_metadata = uploader.upload_json(nft_metadata, pin_name="NFTMetadata-DeploymentProof")
+        ipfs_cid_nft_metadata = uploader_test.upload_json(nft_metadata, pin_name="NFTMetadata-DeploymentProof")
         print(f"Generated IPFS CID (NFT Metadata): {ipfs_cid_nft_metadata}")
         print(f"Pinata Gateway Link (NFT Metadata): https://gateway.pinata.cloud/ipfs/{ipfs_cid_nft_metadata}")
         print("✅ IPFS JSON uploads test successful.")
@@ -263,7 +263,7 @@ if __name__ == "__main__":
             f.write("This is a test document uploaded via Pinata.\n")
             f.write(f"Upload timestamp: {datetime.now().isoformat()}\n")
         try:
-            file_cid = uploader.upload_file(temp_file_path, pin_name="MyTestDocument")
+            file_cid = uploader_test.upload_file(temp_file_path, pin_name="MyTestDocument")
             print(f"Generated File CID: {file_cid}")
             print(f"Pinata Gateway Link (File): https://gateway.pinata.cloud/ipfs/{file_cid}")
             print("✅ IPFS File upload test successful.")
@@ -275,9 +275,30 @@ if __name__ == "__main__":
 
     except Exception as e: # Catching general Exception to make the dummy mode message clearer
         # If the ValueError from __init__ happens, it will be caught here
-        # and print a clear message.
+        # and print a clear message.<br>
         print(f"❌ An unexpected error occurred during IPFSUploader test: {e}")
         if "Pinata API KEY or SECRET is not set" in str(e):
             print("   → The script might be in an environment where API keys are expected but not found.")
 
     print("\n--- IPFSUploader Test Script End (Pinata) ---")
+
+# ✅ 전역으로 Uploader 인스턴스 생성 (api.py에서 사용할 인스턴스)
+ipfs_uploader_instance = IPFSUploader()
+
+def upload_to_ipfs(file_content: str, file_name: str) -> str:
+    """
+    Dummy IPFS upload function for Hackathon demo.
+    It calls the upload_json method of the global IPFSUploader instance.
+    """
+    # 현재 file_content는 문자열로 가정하고, JSON 데이터로 처리하여 업로드합니다.
+    # 실제 파일 업로드 시에는 `ipfs_uploader_instance.upload_file`을 사용해야 합니다.
+    # 여기서는 간단한 더미 JSON으로 변환하여 `upload_json`을 호출합니다.
+    dummy_data = {
+        "fileName": file_name,
+        "contentSnippet": file_content[:100] + "..." if len(file_content) > 100 else file_content,
+        "timestamp": datetime.utcnow().isoformat(),
+        "type": "dummy_upload_from_api_endpoint"
+    }
+    
+    print(f"📦 [IPFS] Request to upload {file_name}. Calling upload_json with dummy data.")
+    return ipfs_uploader_instance.upload_json(dummy_data, pin_name=f"API_Upload-{file_name}")
