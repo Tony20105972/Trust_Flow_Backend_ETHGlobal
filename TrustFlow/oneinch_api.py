@@ -87,7 +87,7 @@ class OneInchAPI:
         except requests.exceptions.RequestException as e:
             print(f"❌ 1inch API request failed: {e}")
             if e.response is not None:
-                print(f"   → Response Status: {e.response.status_code}, Message: {e.response.text}")
+                print(f"    → Response Status: {e.response.status_code}, Message: {e.response.text}")
             raise Exception(f"1inch API request failed: {e}")
         except json.JSONDecodeError:
             print(f"❌ 1inch API response JSON decoding failed. Response: {response.text}")
@@ -162,7 +162,7 @@ class OneInchAPI:
         Args:
             token_address (str): Contract address of the ERC20 token to approve.
             amount_wei (Union[int, str]): Amount of tokens to approve (in Wei units).
-                                          Use a very large number for unlimited approval.
+                                         Use a very large number for unlimited approval.
 
         Returns:
             Dict[str, Any]: Transaction data that can be signed and sent for approval.
@@ -200,7 +200,7 @@ class OneInchAPI:
         # This might be a POST request to a different base URL or endpoint.
         # For demonstration, we'll simulate a successful response.
         print("⚠️ Limit Order creation requires a separate 1inch Limit Order API endpoint.")
-        print("   Currently, this returns a dummy response for concept demonstration. Refer to API docs for actual implementation.")
+        print("    Currently, this returns a dummy response for concept demonstration. Refer to API docs for actual implementation.")
         # Example of how an actual call might look if a POST endpoint existed:
         # return self._make_request("limit-order/v3/submit", method="POST", data=order_data)
         return {"status": "success", "message": "Limit Order created (dummy)", "order_data": order_data}
@@ -218,7 +218,7 @@ def send_onchain_transaction(w3: Web3, private_key: str, tx_data: Dict[str, Any]
         w3 (Web3): Initialized Web3 instance.
         private_key (str): Private key (with 0x prefix) to sign the transaction.
         tx_data (Dict[str, Any]): Dictionary of transaction data built by 1inch API or similar.
-                                   (Expected to contain 'from', 'to', 'data', 'value', 'gas', 'gasPrice', 'nonce' (optional))
+                                  (Expected to contain 'from', 'to', 'data', 'value', 'gas', 'gasPrice', 'nonce' (optional))
         timeout_seconds (int): Maximum time (in seconds) to wait for the transaction receipt.
 
     Returns:
@@ -262,12 +262,12 @@ def send_onchain_transaction(w3: Web3, private_key: str, tx_data: Dict[str, Any]
             raise AttributeError("❌ Could not find 'raw_transaction' or 'rawTransaction' attribute in web3 SignedTransaction object.")
 
         tx_hash = w3.eth.send_raw_transaction(raw_tx)
-        print(f"   → Transaction sent. Hash: {tx_hash.hex()}")
+        print(f"    → Transaction sent. Hash: {tx_hash.hex()}")
 
         # Wait for receipt
         # Use a shorter poll_latency for local testing, longer for real networks
         poll_latency = 0.5 if "127.0.0.1" in w3.provider.endpoint_uri or "localhost" in w3.provider.endpoint_uri else 5
-        print(f"   → Waiting for transaction receipt (max {timeout_seconds}s, polling every {poll_latency}s)...")
+        print(f"    → Waiting for transaction receipt (max {timeout_seconds}s, polling every {poll_latency}s)...")
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout_seconds, poll_latency=poll_latency)
 
         if receipt.status != 1:
@@ -346,7 +346,7 @@ if __name__ == "__main__":
             print(json.dumps(quote_result, indent=2))
             if "toTokenAmount" in quote_result:
                 # USDC typically has 6 decimals
-                print(f"   → Expected USDC for {amount_to_swap_wei / (10**18)} WMATIC: {int(quote_result['toTokenAmount']) / (10**6):.4f} USDC")
+                print(f"    → Expected USDC for {amount_to_swap_wei / (10**18)} WMATIC: {int(quote_result['toTokenAmount']) / (10**6):.4f} USDC")
             print("✅ get_quote test successful.")
         except Exception as e:
             print(f"❌ get_quote test failed: {e}")
@@ -401,15 +401,15 @@ if __name__ == "__main__":
         print("\n--- Test 5: send_onchain_transaction (Actual On-chain Send - Approve) ---")
         if w3_instance and test_private_key and approve_tx_data_built and test_wallet_address != "0x0000000000000000000000000000000000000000":
             try:
-                print(f"   → Attempting to send Approve transaction from wallet ({test_wallet_address})...")
+                print(f"    → Attempting to send Approve transaction from wallet ({test_wallet_address})...")
                 # Use the 'tx' field from the built data
                 approve_tx_hash = send_onchain_transaction(w3_instance, test_private_key, approve_tx_data_built['tx'])
                 print(f"✅ Approve transaction sent successfully. Hash: {approve_tx_hash}")
             except Exception as e:
                 print(f"❌ Approve transaction send failed: {e}")
-                print("   → Check wallet balance, network connection, private key validity.")
+                print("    → Check wallet balance, network connection, private key validity.")
         else:
-            print("   → Skipping Approve transaction send test (Web3 not initialized or data missing).")
+            print("    → Skipping Approve transaction send test (Web3 not initialized or data missing).")
 
 
         # --- Test 6: send_onchain_transaction (Actual On-chain Send - Swap) ---
@@ -418,15 +418,15 @@ if __name__ == "__main__":
         print("\n--- Test 6: send_onchain_transaction (Actual On-chain Send - Swap) ---")
         if w3_instance and test_private_key and swap_tx_data_built and test_wallet_address != "0x0000000000000000000000000000000000000000":
             try:
-                print(f"   → Attempting to send Swap transaction from wallet ({test_wallet_address})...")
+                print(f"    → Attempting to send Swap transaction from wallet ({test_wallet_address})...")
                 # Use the 'tx' field from the built data
                 swap_tx_hash = send_onchain_transaction(w3_instance, test_private_key, swap_tx_data_built['tx'])
                 print(f"✅ Swap transaction sent successfully. Hash: {swap_tx_hash}")
             except Exception as e:
                 print(f"❌ Swap transaction send failed: {e}")
-                print("   → Check wallet balance, network connection, private key validity, and token approval status.")
+                print("    → Check wallet balance, network connection, private key validity, and token approval status.")
         else:
-            print("   → Skipping Swap transaction send test (Web3 not initialized or data missing).")
+            print("    → Skipping Swap transaction send test (Web3 not initialized or data missing).")
 
 
         # --- Test 7: create_limit_order (Limit Order Creation - Concept Demo) ---
@@ -439,7 +439,7 @@ if __name__ == "__main__":
             "makerAsset": WMATIC_MUMBAI,
             "takerAsset": USDC_MUMBAI,
             "makerAmount": str(int(0.005 * (10**18))), # 0.005 WMATIC
-            "takerAmount": str(int(15 * (10**6))),     # 15 USDC
+            "takerAmount": str(int(15 * (10**6))),      # 15 USDC
             "salt": str(Web3.to_int(Web3.keccak(text=str(time.time())).hex())), # Unique salt - PATCHED HERE
             "expiresIn": 3600, # Expires in 1 hour (seconds)
             # Actual Limit Orders require EIP-712 signature here.
@@ -450,15 +450,42 @@ if __name__ == "__main__":
             print("Limit Order Creation Result:")
             print(json.dumps(limit_order_result, indent=2))
             print("✅ create_limit_order test successful (concept demonstration).")
-            print("   💡 Note: Actual 1inch Limit Orders involve more complex signing and submission logic. Refer to 1inch.dev documentation.")
+            print("    💡 Note: Actual 1inch Limit Orders involve more complex signing and submission logic. Refer to 1inch.dev documentation.")
         except Exception as e:
             print(f"❌ create_limit_order test failed: {e}")
 
 
     except ValueError as e:
         print(f"❌ OneInchAPI initialization failed: {e}")
-        print("   → Please ensure your 1inch.dev API key is correctly set.")
+        print("    → Please ensure your 1inch.dev API key is correctly set.")
     except Exception as e:
         print(f"❌ Unexpected error during OneInchAPI test: {e}")
 
     print("\n--- OneInchAPI Test Script End ---")
+
+
+# --- Global Wrapper Functions for API endpoints ---
+def oneinch_swap(src_token: str, dst_token: str, amount: Union[int, str], from_address: str,
+                 slippage: float = 1.0, disable_estimate: bool = False, allow_partial_fill: bool = False) -> Dict[str, Any]:
+    """
+    Wrapper for OneInchAPI.build_swap_transaction (Hackathon demo).
+    Uses ONEINCH_API_KEY from environment.
+    """
+    try:
+        api = OneInchAPI()
+        return api.build_swap_transaction(src_token, dst_token, amount, from_address, slippage)
+    except Exception as e:
+        print(f"❌ oneinch_swap failed: {e}")
+        return {"status": "error", "message": str(e)}
+
+def oneinch_get_quote(src_token: str, dst_token: str, amount: Union[int, str]) -> Dict[str, Any]:
+    """
+    Wrapper for OneInchAPI.get_quote (Hackathon demo).
+    Uses ONEINCH_API_KEY from environment.
+    """
+    try:
+        api = OneInchAPI()
+        return api.get_quote(src_token, dst_token, amount)
+    except Exception as e:
+        print(f"❌ oneinch_get_quote failed: {e}")
+        return {"status": "error", "message": str(e)}
