@@ -5,7 +5,7 @@ from datetime import datetime
 from web3 import Web3
 from eth_account import Account
 from typing import Optional, Dict, Any, List
-import getpass
+# Removed getpass as it implies interactive input, which we are avoiding for core setup
 
 # --- Configuration ---
 TEST_WETH_ADDRESS_SEPOLIA = "0xfFf9976782d46CC05630D1f6eB9Bc98210fBfCc5" # Example Sepolia WETH
@@ -111,36 +111,26 @@ class Web3Client:
         self.lop_contract_address: Optional[str] = None
         self.current_nonce: Optional[int] = None
 
-        # 1. Get RPC URL from environment variable or user input
+        # 1. Get RPC URL ONLY from environment variable
         rpc_url = os.getenv("WEB3_RPC_URL_SEPOLIA")
         if not rpc_url:
-            rpc_url = input("🔐 Enter your Web3 RPC URL (e.g., Infura/Alchemy Sepolia URL): ")
-            if not rpc_url:
-                raise ValueError("Web3Client cannot be initialized without an RPC URL.")
-            print("❗ Using RPC URL from user input. For production, consider setting WEB3_RPC_URL_SEPOLIA environment variable.")
-        else:
-            print(f"✅ Using RPC URL from environment variable.")
+            raise ValueError("WEB3_RPC_URL_SEPOLIA environment variable is not set. This is required for Web3Client initialization.")
+        print(f"✅ Web3 RPC URL loaded from ENV: {rpc_url}")
 
         try:
             self.w3 = Web3(Web3.HTTPProvider(rpc_url))
             if not self.w3.is_connected():
-                raise ConnectionError(f"Failed to connect to Web3 RPC URL: {rpc_url}")
+                raise ConnectionError(f"Failed to connect to Web3 RPC URL: {rpc_url}. Check URL and network connectivity.")
             print(f"✅ Web3 connected to {rpc_url}.")
         except Exception as e:
             print(f"❌ Critical error connecting to Web3 RPC URL {rpc_url}: {e}")
             raise
 
-        # 2. Get wallet private key from environment variable or user input (hidden)
+        # 2. Get wallet private key ONLY from environment variable
         private_key = os.getenv("WALLET_PRIVATE_KEY")
         if not private_key:
-            private_key = getpass.getpass("🔐 Enter your wallet private key (input will be hidden): ")
-            if not private_key:
-                print("❗❗ No private key provided. On-chain operations will not be possible.")
-                return
-            print("❗ Using private key from user input. For production, consider setting WALLET_PRIVATE_KEY environment variable.")
-        else:
-            print(f"✅ Using private key from environment variable.")
-
+            raise ValueError("WALLET_PRIVATE_KEY environment variable is not set. This is required for signing transactions.")
+        print(f"✅ Wallet private key loaded from ENV.")
 
         try:
             self.account = Account.from_key(private_key)
@@ -148,34 +138,27 @@ class Web3Client:
             self.current_nonce = self.w3.eth.get_transaction_count(self.account.address)
             print(f"✅ Wallet {self.account.address} loaded and set for transaction signing. Current nonce: {self.current_nonce}")
         except ValueError as e:
-            print(f"❌ Error loading private key: {e}")
-            print("❗❗ Invalid private key. On-chain operations will fail.")
+            print(f"❌ Error loading private key: {e}. Ensure it is a valid hex string.")
             self.account = None
+            raise # Re-raise to halt initialization if private key is invalid
         except Exception as e:
             print(f"❌ Unexpected error loading private key: {e}")
             self.account = None
+            raise
 
-        # 3. Get DUMMY LOP Contract Address from environment variable or user input
+        # 3. Get DUMMY LOP Contract Address ONLY from environment variable
         lop_address_input = os.getenv("DUMMY_LOP_CONTRACT_ADDRESS")
         if not lop_address_input:
-            lop_address_input = input("🔐 Enter DUMMY LOP Contract Address (Sepolia): ")
-            if not lop_address_input:
-                print("❌ Error: LOP contract address not provided.")
-                print("❗❗ Using fallback address 0x00...dEaD. Contract interactions will fail.")
-                self.lop_contract_address = Web3.to_checksum_address("0x000000000000000000000000000000000000dEaD")
-            else:
-                print("❗ Using LOP contract address from user input. For production, consider setting DUMMY_LOP_CONTRACT_ADDRESS environment variable.")
-        else:
-            print(f"✅ Using LOP contract address from environment variable.")
-
+            raise ValueError("DUMMY_LOP_CONTRACT_ADDRESS environment variable is not set. This is required for LOP contract interactions.")
+        print(f"✅ LOP Contract Address loaded from ENV: {lop_address_input}")
 
         if Web3.is_address(lop_address_input):
             self.lop_contract_address = Web3.to_checksum_address(lop_address_input)
             print(f"✅ LOP contract address '{self.lop_contract_address}' set.")
         else:
-            print(f"❌ Error: Entered LOP contract address '{lop_address_input}' is not a valid Ethereum address.")
-            print("❗❗ Using fallback address 0x00...dEaD. Contract interactions will fail.")
-            self.lop_contract_address = Web3.to_checksum_address("0x000000000000000000000000000000000000dEaD")
+            print(f"❌ Error: Environment variable DUMMY_LOP_CONTRACT_ADDRESS '{lop_address_input}' is not a valid Ethereum address.")
+            print("❗❗ LOP contract interactions will fail. Please correct the environment variable.")
+            self.lop_contract_address = Web3.to_checksum_address("0x000000000000000000000000000000000000dEaD") # Fallback to a dummy address
 
 
     def get_token_info(self, token_address: str) -> Dict[str, Any]:
@@ -437,7 +420,7 @@ class LOPManager:
                 else:
                     print(f"❌ [LOP] Failed to submit ERC-20 approval transaction for Order {order_id}.")
             else:
-                print(f"❌ [LOP] Skipping ERC-20 approval as LOP contract address is fallback. Please enter a valid address.")
+                print(f"❌ [LOP] Skipping ERC-20 approval as LOP contract address is fallback. Please ensure a valid address is set via ENV.")
         else:
             print(f"❌ [LOP] Skipping ERC-20 approval as LOP contract address or wallet is not set.")
 
@@ -510,9 +493,43 @@ class LOPManager:
 
 # --- Main Test Flow (for local testing, not for API deployment) ---
 if __name__ == "__main__":
-    # This block will only execute when lop_manager.py is run directly, not when imported as a module by FastAPI.
+    # This block will ONLY execute when lop_manager.py is run directly.
+    # It includes interactive input for local development convenience.
+    # FOR RENDER DEPLOYMENT, ENSURE ENVIRONMENT VARIABLES ARE SET.
     print("\n--- Web3 Integration LOPManager Flow Test (Stand-alone) ---")
-    lop_manager_instance = LOPManager()
+    
+    # Temporarily override os.getenv for local interactive test
+    original_getenv = os.getenv
+    def mock_getenv(key, default=None):
+        val = original_getenv(key, default)
+        if val is None:
+            if key == "WEB3_RPC_URL_SEPOLIA":
+                val = input("🔐 Enter your Web3 RPC URL (e.g., Infura/Alchemy Sepolia URL): ")
+            elif key == "WALLET_PRIVATE_KEY":
+                # Using standard input() for simplicity in this mock, getpass is not available here easily
+                val = input("🔐 Enter your wallet private key (input will be visible in console): ") 
+            elif key == "DUMMY_LOP_CONTRACT_ADDRESS":
+                val = input("🔐 Enter DUMMY LOP Contract Address (Sepolia): ")
+        return val
+
+    os.getenv = mock_getenv
+
+    try:
+        lop_manager_instance = LOPManager()
+    except ValueError as e:
+        print(f"Initialization failed: {e}")
+        print("Please set the required environment variables or provide valid inputs locally.")
+        exit(1)
+    except ConnectionError as e:
+        print(f"Web3 connection failed: {e}")
+        print("Please check your RPC URL and network connectivity.")
+        exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred during LOPManager initialization: {e}")
+        exit(1)
+
+    # Restore original os.getenv after initialization to not affect other modules
+    os.getenv = original_getenv
 
     # ==============================================================================
     # IMPORTANT: Before running the script, please ensure the following:
