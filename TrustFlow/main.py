@@ -1,32 +1,21 @@
-from fastapi import FastAPI
-from TrustFlow.api import router as api_router
-from fastapi.middleware.cors import CORSMiddleware
+# TrustFlow/main.py
+# 이 파일은 FastAPI 애플리케이션의 진입점 역할을 합니다.
+# uvicorn trustflow.main:app --reload 와 같이 실행될 때,
+# 'trustflow' 패키지 내의 'main' 모듈에서 'app' 객체를 찾습니다.
 
-app = FastAPI(
-    title="TrustFlow API",
-    description="Backend API for TrustFlow dApp with AI Contract Generation, DAO, ZK, IPFS, 1inch, and LOP features.",
-    version="0.1.0",
-)
+from .api import app
 
-# ✅ 프론트엔드 링크(Lovable) 전용 CORS 허용
-origins = [
-    "https://trustflow-flow-builder.lovable.app",  # ✅ Lovable 프론트 URL (오타 수정: lovable.app)
-    # 로컬 개발 환경에서 테스트할 경우 아래 주석을 풀어서 사용하세요.
-    # "http://localhost",
-    # "http://localhost:3000",
-    # "http://localhost:8000",
-]
+# main.py는 api.py에서 정의된 'app' FastAPI 인스턴스를 노출합니다.
+# 추가적인 초기화 로직이나 미들웨어 설정이 필요하면 여기에 추가할 수 있습니다.
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],    # OPTIONS, GET, POST 등 모두 허용
-    allow_headers=["*"],    # Content-Type, Authorization 등 모두 허용
-)
+# 예시: 애플리케이션 시작 시 메시지 출력
+@app.on_event("startup")
+async def startup_event():
+    print(“TrustFlow API is running! Let's explore DeFi together 🚀”)
 
-app.include_router(api_router)
+@app.on_event("shutdown")
+async def shutdown_event():
+    print("👋 The TrustFlow FastAPI application shuts down.”)
 
-@app.get("/")
-async def root():
-    return {"message": "TrustFlow API is running! Let's explore DeFi together 🚀"}
+# 이 파일은 주로 uvicorn이 `app` 객체를 찾을 수 있도록 돕는 역할을 합니다.
+# 실제 API 엔드포인트 로직은 api.py에 있습니다.
