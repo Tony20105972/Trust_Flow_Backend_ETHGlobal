@@ -1,7 +1,6 @@
-# main.py
 from fastapi import FastAPI
-from TrustFlow.api import router as api_router
-from fastapi.middleware.cors import CORSMiddleware # Import CORS middleware
+from TrustFlow.api import router as api_router # Ensure this import path is correct
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="TrustFlow API",
@@ -27,6 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include the API router from TrustFlow/api.py
 app.include_router(api_router)
 
 @app.get("/")
