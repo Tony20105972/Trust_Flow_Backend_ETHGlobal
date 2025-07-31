@@ -1,3 +1,4 @@
+
 import os
 import getpass
 from typing import Optional, Dict, Any, List
@@ -131,8 +132,24 @@ def contract_generate_solidity_groq(user_description: str, model: str = "llama3-
         "explanation": explanation_text
     }
 
+def create_contract_from_prompt(prompt: str) -> str:
+    """
+    Wrapper function to be called from api.py.
+    - Uses contract_generate_solidity_groq() internally to generate contract code.
+    - Returns only the Solidity code string.
+    """
+    try:
+        result = contract_generate_solidity_groq(prompt)
+        # Ensure 'solidity_code' key exists in the returned dictionary
+        if "solidity_code" not in result:
+            raise ValueError("contract_generate_solidity_groq did not return 'solidity_code'.")
+        return result["solidity_code"]
+    except Exception as e:
+        # Re-raise the exception with more context for easier debugging
+        raise RuntimeError(f"[TrustFlow] Failed to generate contract from prompt: {e}")
 
-# --- Usage Example ---
+
+# --- Usage Example (for testing main functions) ---
 if __name__ == "__main__":
     print("--- Groq-powered Smart Contract Chatbot and Generator Test ---")
     try:
@@ -221,6 +238,15 @@ contract SimpleAuction {
         print(f"[User]: {user_gen_desc_2}")
         print(f"\n[Generated Solidity Code]:\n{generated_output_2['solidity_code']}")
         print(f"\n[Code Explanation]:\n{generated_output_2['explanation']}")
+
+        print("\n" + "="*70 + "\n")
+
+        # 4. Test create_contract_from_prompt function (to be used by api.py)
+        test_prompt = "Create a simple voting contract. Voting should only be possible for a fixed duration, and only the contract owner can add voting options."
+        print(f"[create_contract_from_prompt Test] Prompt: {test_prompt[:70]}...")
+        generated_api_code = create_contract_from_prompt(test_prompt)
+        print(f"\n[create_contract_from_prompt Result]:\n{generated_api_code}")
+
 
     except RuntimeError as e:
         print(f"Error during execution: {e}")
