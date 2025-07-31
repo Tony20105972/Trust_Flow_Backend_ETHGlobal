@@ -1,106 +1,105 @@
-# agentlayer/rule_checker.py
-
-import json
 import os
+import json
 from typing import Dict, Any, List
 
-def load_constitution_rules() -> List[Dict[str, Any]]:
+# Rule Checker (Constitution)
+class RuleChecker:
+    def __init__(self, constitution_path: str = "constitution.json"):
+        # Corrected path: Assumes constitution.json is in the same directory as rule_checker.py
+        # If rule_checker.py is in TrustFlow/ and constitution.json is also in TrustFlow/, this is correct.
+        # If constitution.json is in TrustFlow/data/constitution.json, you need to adjust:
+        # self.constitution_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "constitution.json")
+        self.constitution_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), constitution_path)
+        self.rules = self._load_constitution()
+        print(f"✅ RuleChecker initialized. Constitution loaded from: {self.constitution_path}")
+
+    def _load_constitution(self) -> Dict[str, Any]:
+        """Loads rules from the constitution.json file."""
+        if not os.path.exists(self.constitution_path):
+            print(f"❌ Error: Constitution file not found at {self.constitution_path}")
+            raise FileNotFoundError(f"Constitution file not found at {self.constitution_path}")
+        with open(self.constitution_path, 'r', encoding='utf-8') as f:
+            content = json.load(f)
+            # Ensure 'rules' key exists
+            if "rules" not in content:
+                raise ValueError("Constitution file must contain a 'rules' key.")
+            return content
+
+    def _evaluate_condition(self, condition: str, context: Dict[str, Any]) -> bool:
+        """
+        Evaluates a condition string within a given context.
+        Uses a restricted environment for security.
+        """
+        # Define allowed built-ins to restrict arbitrary code execution
+        allowed_builtins = {
+            'True': True, 'False': False, 'None': None,
+            'all': all, 'any': any, 'len': len,
+            'str': str, 'int': int, 'float': float,
+            'list': list, 'dict': dict, 'set': set,
+            'tuple': tuple
+        }
+        try:
+            # Safely evaluate the condition string
+            # 'context' provides variables like 'solidity_code', 'proposal', 'wallet', 'result'
+            # '__builtins__' are restricted to prevent arbitrary code execution
+            return bool(eval(condition, {"__builtins__": allowed_builtins}, context))
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to evaluate condition '{condition}' with context {context}. Error: {e}")
+            return False # Default to false if evaluation fails
+
+    def check_proposal_adherence(self, proposal_data: Dict[str, Any]) -> List[str]:
+        """
+        Checks a DAO proposal against the loaded constitutional rules.
+        Returns a list of violations.
+        """
+        violations = []
+        context = {"proposal": proposal_data} # Context for evaluating proposal-related rules
+
+        for rule in self.rules.get("rules", []):
+            if "DAO proposals" in rule.get("description", "") or "proposal" in rule.get("condition", ""): # Heuristic to apply rules to proposals
+                if not self._evaluate_condition(rule["condition"], context):
+                    violations.append(rule["name"])
+
+        print(f"📋 Proposal adherence check completed. Violations: {violations}")
+        return violations
+
+    def check_code_adherence(self, code: str, code_type: str, target_lang: str) -> List[str]:
+        """
+        Checks the provided code against defined coding standards and security rules.
+        Returns a list of violations found in the code.
+        """
+        print(f"📋 Checking {code_type} code for adherence to rules (Language: {target_lang})...")
+        violations = []
+        context = {
+            "solidity_code": code if target_lang.lower() == "solidity" else "",
+            "code": code,
+            "code_type": code_type,
+            "target_lang": target_lang
+        }
+
+        for rule in self.rules.get("rules", []):
+            # Apply rules relevant to code analysis
+            # This heuristic could be improved with dedicated 'applies_to' field in constitution.json
+            if "solidity_code" in rule.get("condition", "") or "code" in rule.get("condition", ""):
+                 if not self._evaluate_condition(rule["condition"], context):
+                    violations.append(rule["name"])
+        
+        print(f"📋 Code adherence check completed. Violations: {violations}")
+        return violations
+
+# Create a global instance of RuleChecker
+try:
+    # Ensure this path is correct relative to where rule_checker.py is located
+    rule_checker_instance = RuleChecker(constitution_path="constitution.json")
+except Exception as e:
+    print(f"Failed to initialize RuleChecker: {e}")
+    raise
+
+# Wrapper function for check_code endpoint with default values
+def check_code(code: str, code_type: str = "smart_contract", target_lang: str = "solidity") -> Dict[str, Any]:
     """
-    Loads constitution rules from constitution.json.
+    Wrapper function to expose rule_checker_instance.check_code_adherence.
+    Provides default values for code_type and target_lang.
     """
-    constitution_path = "agentlayer/constitution.json"
-    if os.path.exists(constitution_path):
-        with open(constitution_path, "r", encoding="utf-8") as f:
-            try:
-                data = json.load(f)
-                return data.get("rules", [])
-            except json.JSONDecodeError:
-                print(f"Error: Could not decode JSON from {constitution_path}. Returning empty rules.")
-                return []
-    return []
-
-def check_violations(input_text: str, output_text: str, role: str, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Checks for violations against constitution rules based on input, output, and role.
-    """
-    violations = []
-
-    for rule in rules:
-        rule_id = rule.get("id", "unknown")
-        rule_type = rule.get("type")
-        severity = rule.get("severity", "low")
-
-        if rule_type == "keyword":
-            for keyword in rule.get("keywords", []):
-                # Case-insensitive check
-                if keyword.lower() in input_text.lower() or (output_text and keyword.lower() in output_text.lower()):
-                    violations.append({
-                        "rule_id": rule_id,
-                        "type": "keyword",
-                        "trigger": keyword,
-                        "severity": severity
-                    })
-        elif rule_type == "role":
-            allowed_roles = rule.get("allowed_roles", [])
-            if role not in allowed_roles:
-                violations.append({
-                    "rule_id": rule_id,
-                    "type": "role",
-                    "trigger": role,
-                    "severity": severity
-                })
-        # Add other rule types (e.g., "length", "format") here as needed.
-    return violations
-
-if __name__ == "__main__":
-    # Ensure dummy constitution.json file is created for testing
-    os.makedirs("agentlayer", exist_ok=True)
-    dummy_constitution_path = "agentlayer/constitution.json"
-    if not os.path.exists(dummy_constitution_path):
-        with open(dummy_constitution_path, "w", encoding="utf-8") as f:
-            f.write("""
-{
-    "rules": [
-        {"id": "R1", "type": "keyword", "keywords": ["sudo", "rm -rf"], "severity": "high"},
-        {"id": "R2", "type": "role", "allowed_roles": ["developer", "architect"], "severity": "medium"},
-        {"id": "R3", "type": "keyword", "keywords": ["unethical"], "severity": "critical"}
-    ]
-}
-            """)
-
-    print("--- Testing rule_checker.py ---")
-
-    rules = load_constitution_rules()
-    print(f"Loaded rules: {json.dumps(rules, indent=2, ensure_ascii=False)}")
-
-    # Test Case 1: No violations
-    input1 = "Please write a simple Python function."
-    output1 = "```python\ndef hello(): return 'Hello'\n```"
-    role1 = "developer"
-    v1 = check_violations(input1, output1, role1, rules)
-    print(f"\nTest 1 (No violations): Input='{input1}', Output='{output1}', Role='{role1}'")
-    print(f"Violations: {v1}") # Expected: []
-
-    # Test Case 2: Keyword violation in input
-    input2 = "I need to run the sudo command."
-    output2 = "Understood."
-    role2 = "developer"
-    v2 = check_violations(input2, output2, role2, rules)
-    print(f"\nTest 2 (Keyword violation in input): Input='{input2}', Output='{output2}', Role='{role2}'")
-    print(f"Violations: {v2}") # Expected: [{"rule_id": "R1", "type": "keyword", "trigger": "sudo", "severity": "high"}]
-
-    # Test Case 3: Role violation
-    input3 = "Analyze market trends."
-    output3 = "Analysis complete."
-    role3 = "analyst" # Not in allowed roles for R2 (developer, architect)
-    v3 = check_violations(input3, output3, role3, rules)
-    print(f"\nTest 3 (Role violation): Input='{input3}', Output='{output3}', Role='{role3}'")
-    print(f"Violations: {v3}") # Expected: [{"rule_id": "R2", "type": "role", "trigger": "analyst", "severity": "medium"}]
-
-    # Test Case 4: Multiple violations (keyword in output, role)
-    input4 = "Write a script to delete files."
-    output4 = "To rm -rf files, use this script..." # Forbidden keyword in output
-    role4 = "tester" # Not allowed
-    v4 = check_violations(input4, output4, role4, rules)
-    print(f"\nTest 4 (Multiple violations): Input='{input4}', Output='{output4}', Role='{role4}'")
-    print(f"Violations: {v4}") # Expected: Two violations, one keyword, one role
+    violations = rule_checker_instance.check_code_adherence(code, code_type, target_lang)
+    return {"violations": violations, "status": "analyzed"}
