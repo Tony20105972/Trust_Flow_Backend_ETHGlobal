@@ -29,4 +29,4 @@ app.include_router(api_router)
 
 @app.get("/")
 async def root():
-    return {"message": "TrustFlow API is running! Let's explore DeFi together 🚀""}
+    return {"message": "TrustFlow API is running! Let's explore DeFi together 🚀"}
