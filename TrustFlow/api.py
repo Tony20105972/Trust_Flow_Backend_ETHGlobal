@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 try:
     from .dao_manager import DAOManager
     from .rule_checker import check_code # check_code 래퍼 함수는 RuleChecker 인스턴스를 사용합니다.
-    from .lop_manager import LopManager
+    from .lop_manager import LOPManager  # <-- 수정됨: LopManager -> LOPManager
     from .deploy_manager import DeploymentManager
     from .zk_oracle_detector import analyze_zk_oracle # TrustFlow/utils가 아닌 TrustFlow/ 바로 아래로 수정
     from .ipfs_uploader import upload_to_ipfs       # TrustFlow/utils가 아닌 TrustFlow/ 바로 아래로 수정
@@ -26,7 +26,7 @@ app = FastAPI()
 # 글로벌 매니저 인스턴스
 try:
     dao_manager_instance = DAOManager()
-    lop_manager_instance = LopManager()
+    lop_manager_instance = LOPManager()  # <-- 수정됨: LopManager() -> LOPManager()
     deploy_manager_instance = DeploymentManager()
 except Exception as e:
     print(f"매니저 인스턴스 초기화 실패: {e}")
