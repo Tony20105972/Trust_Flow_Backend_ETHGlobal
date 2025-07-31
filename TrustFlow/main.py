@@ -1,29 +1,35 @@
-# TrustFlow/main.py
+# main.py
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from TrustFlow import api  # api.py 라우터 임포트
+from TrustFlow.api import router as api_router
+from fastapi.middleware.cors import CORSMiddleware # Import CORS middleware
 
 app = FastAPI(
-    title="TrustFlow Backend",
-    description="FastAPI backend for TrustFlow (Samantha OS) - AI → Smart Contract → Onchain Deployment",
-    version="1.0.0",
+    title="TrustFlow API",
+    description="Backend API for TrustFlow dApp with AI Contract Generation, DAO, ZK, IPFS, 1inch, and LOP features.",
+    version="0.1.0",
 )
 
-# ✅ CORS 설정 (프론트엔드 연결용)
+# Add CORS settings (essential for frontend connection)
+# For production, it's a good security practice to restrict `allow_origins` to your frontend's specific domain(s).
+origins = [
+    "http://localhost",
+    "http://localhost:3000", # React development server address
+    "http://localhost:8000", # FastAPI development server address
+    # "https://your-frontend-domain.com", # Actual frontend deployment domain
+    # "https://your-render-backend-url.onrender.com" # If the backend needs to call itself
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # 해커톤 데모용, 배포시 특정 도메인으로 제한 가능
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ API 라우터 연결
-app.include_router(api.router)
+app.include_router(api_router)
 
 @app.get("/")
-def root():
-    return {"status": "ok", "message": "TrustFlow Backend is running 🚀"}
-
-# ✅ Uvicorn 실행 (로컬 개발용)
-# uvicorn trustflow.main:app --reload
+async def root():
+    """Root endpoint for basic health check."""
+    return {"message": "TrustFlow API is running! Access /docs for API documentation."}
