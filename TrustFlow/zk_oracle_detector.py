@@ -63,7 +63,7 @@ class ZKOracleDetector:
 
             findings[category] = {
                 "detected": detected,
-                "reason": info["description"] if detected else "Pattern not detected in the code.", # English translation
+                "reason": info["description"] if detected else "Pattern not detected in the code.",
                 "matched_patterns": matched_keywords if detected else []
             }
         return findings
@@ -72,7 +72,7 @@ class ZKOracleDetector:
 if __name__ == "__main__":
     print("\n--- ZKOracleDetector Test Script Start ---") # English translation
 
-    detector = ZKOracleDetector()
+    detector_test = ZKOracleDetector() # Use a different name for test instance to avoid conflict
 
     # Test Case 1: Detect ZK patterns
     zk_code = """
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     }
     """
     print("\n[Test: ZK Pattern Detection]") # English translation
-    zk_results = detector.scan_code(zk_code)
+    zk_results = detector_test.scan_code(zk_code)
     # Ensure json.dumps outputs standard ASCII (no need for ensure_ascii=False for English)
     print(json.dumps(zk_results, indent=2))
     assert zk_results["ZK_Features"]["detected"] == True
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     }
     """
     print("\n[Test: Oracle Pattern Detection]") # English translation
-    oracle_results = detector.scan_code(oracle_code)
+    oracle_results = detector_test.scan_code(oracle_code)
     print(json.dumps(oracle_results, indent=2))
     assert oracle_results["Oracle_Integration"]["detected"] == True
     print("✅ Oracle pattern detection test successful.") # English translation
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     }
     """
     print("\n[Test: KYC Pattern Detection]") # English translation
-    kyc_results = detector.scan_code(kyc_code)
+    kyc_results = detector_test.scan_code(kyc_code)
     print(json.dumps(kyc_results, indent=2))
     assert kyc_results["KYC_AML_Compliance"]["detected"] == True
     print("✅ KYC pattern detection test successful.") # English translation
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     }
     """
     print("\n[Test: No Patterns]") # English translation
-    clean_results = detector.scan_code(clean_code)
+    clean_results = detector_test.scan_code(clean_code)
     print(json.dumps(clean_results, indent=2))
     assert clean_results["ZK_Features"]["detected"] == False
     assert clean_results["Oracle_Integration"]["detected"] == False
@@ -157,3 +157,28 @@ if __name__ == "__main__":
     print("✅ No patterns test successful.") # English translation
 
     print("\n--- ZKOracleDetector Test Script End ---") # English translation
+
+
+# ✅ 전역으로 감지기 인스턴스 생성 (api.py에서 사용할 인스턴스)
+detector = ZKOracleDetector()
+
+def analyze_zk_oracle(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Dummy analyze_zk_oracle function for API integration.
+    Currently, it extracts 'code' from the input data and performs a scan
+    using the ZKOracleDetector instance. Real ZK-SNARK specific analysis
+    logic would be added here in a more advanced implementation.
+    """
+    code = data.get("code", "")
+    if not code:
+        return {
+            "status": "error",
+            "message": "No Solidity code provided for analysis in 'data' dictionary. Please include 'code' key."
+        }
+
+    results = detector.scan_code(code)
+    return {
+        "status": "success",
+        "message": "ZK Oracle pattern scan completed.",
+        "results": results
+    }
