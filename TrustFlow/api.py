@@ -1,9 +1,11 @@
-# TrustFlow/api.py
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+import sys # For sys.exit()
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 # Backend modules import
+# Assuming these are directly importable from the TrustFlow package root
+# e.g., if TrustFlow is a package and these are modules within it.
 from TrustFlow import (
     generate_contract, template_mapper, rule_checker,
     deploy_manager, dao_manager, zk_oracle_detector,
@@ -13,16 +15,50 @@ from TrustFlow import (
 
 router = APIRouter()
 
-# ✅ LOPManager instance creation (global)
-# This instance will be initialized once when the FastAPI server starts.
+# --- Global LOPManager Instance ---
+# This instance will be initialized once when the FastAPI server starts
+# due to its placement at the module level.
 # With the updated lop_manager.py, it will now try to read environment variables first.
+lop: Optional[lop_manager.LOPManager] = None
+
 try:
+    print("🚀 Attempting to initialize LOPManager in api.py...")
     lop = lop_manager.LOPManager()
+    print("✅ LOPManager initialized successfully in api.py.")
+except ValueError as e:
+    # This catches errors from Web3Client if ENV variables are missing.
+    # On Render, this means you forgot to set environment variables.
+    print(f"🚨 FATAL ERROR: LOPManager initialization failed due to missing environment variable: {e}", file=sys.stderr)
+    lop = None
+    # In a production setup, if this is a critical dependency,
+    # you might want to terminate the application startup here.
+    # For a web server, letting it start but returning 503 on affected endpoints is also an option.
+    # If using uvicorn/gunicorn, sys.exit(1) here would prevent the server from binding.
+    # sys.exit(1) # Uncomment this if you want to hard-stop the app on startup failure.
 except Exception as e:
-    print(f"⚠️ Warning: LOPManager initialization failed. Please ensure required environment variables (WEB3_RPC_URL_SEPOLIA, WALLET_PRIVATE_KEY, DUMMY_LOP_CONTRACT_ADDRESS) are set in your deployment environment (e.g., Render). Error: {e}")
-    # In a production setup, you might want to raise an exception here
-    # or handle this more gracefully, perhaps by disabling LOP endpoints.
-    lop = None 
+    # Catch any other unexpected errors during initialization
+    print(f"🚨 FATAL ERROR: An unexpected error occurred during LOPManager initialization: {e}", file=sys.stderr)
+    lop = None
+    # sys.exit(1) # Uncomment this if you want to hard-stop the app on startup failure.
+
+# If lop is still None after the try-except, indicate that core functionality is unavailable
+if lop is None:
+    print("⚠️ Warning: LOPManager could not be initialized. On-chain related APIs will return 503 errors.", file=sys.stderr)
+
+
+# --- Dependency for LOPManager (to be used by LOP endpoints) ---
+async def get_lop_manager_instance():
+    """
+    Dependency injector for LOPManager.
+    Raises HTTPException 503 if LOPManager failed to initialize.
+    """
+    if lop is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LOPManager is not initialized. Check server logs for details (missing ENV vars, Web3 connectivity)."
+        )
+    return lop
+
 
 # ✅ 1. Deploy API --------------------------------------
 
@@ -30,7 +66,7 @@ class DeployRequest(BaseModel):
     prompt: str
     wallet_address: Optional[str] = None 
 
-@router.post("/deploy/code")
+@router.post("/deploy/code", summary="AI Prompt -> Solidity Code Generation & Deployment")
 async def deploy_code(data: DeployRequest):
     """
     1) AI Prompt -> Solidity Code Generation
@@ -48,7 +84,7 @@ async def deploy_code(data: DeployRequest):
     try:
         deploy_result = deploy_manager.deploy_code(solidity_code, wallet=data.wallet_address)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Contract deployment failed: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Contract deployment failed: {e}")
 
     return {
         "prompt": data.prompt,
@@ -64,7 +100,7 @@ class ProposalRequest(BaseModel):
     description: str
     wallet_address: Optional[str] = None
 
-@router.post("/dao/proposal")
+@router.post("/dao/proposal", summary="Create DAO Proposal")
 async def create_proposal(req: ProposalRequest):
     """
     Create DAO Proposal
@@ -77,7 +113,7 @@ class VoteRequest(BaseModel):
     vote: str    # "for" or "against"
     wallet_address: Optional[str] = None
 
-@router.post("/dao/vote")
+@router.post("/dao/vote", summary="Vote on DAO Proposal")
 async def vote(req: VoteRequest):
     """
     Vote on DAO Proposal
@@ -90,7 +126,7 @@ async def vote(req: VoteRequest):
 class ZKDetectRequest(BaseModel):
     solidity_code: str
 
-@router.post("/zk-detect")
+@router.post("/zk-detect", summary="Detect ZK/Oracle/KYC in Solidity Code (Mock)")
 async def zk_detect(req: ZKDetectRequest):
     """
     Detect ZK/Oracle/KYC in Solidity Code
@@ -100,7 +136,7 @@ async def zk_detect(req: ZKDetectRequest):
 
 # ✅ 4. IPFS Report Upload ---------------------------
 
-@router.post("/ipfs")
+@router.post("/ipfs", summary="Upload Report File to IPFS (Mock)")
 async def upload_report(file: UploadFile = File(...)):
     """
     Upload Report File to IPFS
@@ -109,7 +145,7 @@ async def upload_report(file: UploadFile = File(...)):
         ipfs_hash = ipfs_uploader.upload_file(file)
         return {"status": "uploaded", "ipfs_hash": ipfs_hash}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"IPFS upload failed: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IPFS upload failed: {e}")
 
 # ✅ 5. 1inch API Integration -------------------------------
 
@@ -119,7 +155,7 @@ class SwapRequest(BaseModel):
     amount: float
     wallet_address: Optional[str] = None
 
-@router.post("/1inch/swap")
+@router.post("/1inch/swap", summary="Call 1inch Swap API (Mock)")
 async def oneinch_swap(req: SwapRequest):
     """
     Call 1inch Swap API
@@ -128,9 +164,9 @@ async def oneinch_swap(req: SwapRequest):
         swap_result = oneinch_api.swap(req.from_token, req.to_token, req.amount, req.wallet_address)
         return {"status": "ok", "swap": swap_result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"1inch swap failed: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"1inch swap failed: {e}")
 
-@router.get("/1inch/quote")
+@router.get("/1inch/quote", summary="Call 1inch Quote API (Mock)")
 async def oneinch_quote(from_token: str, to_token: str, amount: float):
     """
     Call 1inch Quote API
@@ -139,10 +175,12 @@ async def oneinch_quote(from_token: str, to_token: str, amount: float):
         quote_result = oneinch_api.get_quote(from_token, to_token, amount)
         return {"status": "ok", "quote": quote_result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"1inch quote failed: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"1inch quote failed: {e}")
 
 
 # ✅ 6. LOPManager API -------------------------------
+
+from fastapi import Depends # Import Depends for dependency injection
 
 class LimitOrderRequest(BaseModel):
     prompt: str
@@ -154,57 +192,69 @@ class LimitOrderRequest(BaseModel):
 class OrderIdRequest(BaseModel): # New Pydantic model for single order_id argument
     order_id: int
 
-@router.post("/lop/create")
-async def create_limit_order_api(req: LimitOrderRequest):
+@router.post("/lop/create", summary="Create LOP Limit Order & Execute ERC20 Approval Transaction")
+async def create_limit_order_api(
+    req: LimitOrderRequest,
+    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance) # Inject the lop_manager instance
+):
     """Create LOP Limit Order + Execute ERC20 Approval Transaction"""
-    if lop is None:
-        raise HTTPException(status_code=503, detail="LOPManager is not initialized. Please set required environment variables for deployment.")
     try:
-        order = lop.create_limit_order(req.prompt, req.from_token, req.to_token, req.amount, req.price)
+        order = current_lop.create_limit_order(req.prompt, req.from_token, req.to_token, req.amount, req.price)
         return {"status": "ok", "order": order}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create limit order: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create limit order: {e}")
 
-@router.post("/lop/dao-approve")
-async def dao_approve_api(req: OrderIdRequest):
+@router.post("/lop/dao-approve", summary="Simulate DAO Pre-Approval for LOP Order")
+async def dao_approve_api(
+    req: OrderIdRequest,
+    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance)
+):
     """Simulate DAO Pre-Approval"""
-    if lop is None:
-        raise HTTPException(status_code=503, detail="LOPManager is not initialized. Please set required environment variables for deployment.")
     try:
-        result = lop.initiate_dao_pre_approval(req.order_id)
+        result = current_lop.initiate_dao_pre_approval(req.order_id)
+        if not result:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Order {req.order_id} not found.")
         return {"status": "ok", "dao": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initiate DAO approval: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to initiate DAO approval: {e}")
 
-@router.post("/lop/submit")
-async def submit_order_api(req: OrderIdRequest):
+@router.post("/lop/submit", summary="On-chain LOP Order Submission and Execution Simulation")
+async def submit_order_api(
+    req: OrderIdRequest,
+    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance)
+):
     """On-chain Order Submission and Execution Simulation"""
-    if lop is None:
-        raise HTTPException(status_code=503, detail="LOPManager is not initialized. Please set required environment variables for deployment.")
     try:
-        result = lop.submit_order_on_chain_and_simulate_execution(req.order_id)
+        result = current_lop.submit_order_on_chain_and_simulate_execution(req.order_id)
+        if not result or "status" not in result:
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Order {req.order_id} not found or submission failed to return result.")
+        if result.get("status") == "FAILED_ONCHAIN":
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"On-chain submission failed for order {req.order_id}: {result.get('error', 'Unknown error')}")
         return {"status": "ok", "execution": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to submit order on-chain: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to submit order on-chain: {e}")
 
-@router.get("/lop/orders", response_model=Dict[str, List[Dict[str, Any]]]) # Explicit response model
-async def list_orders_api():
+@router.get("/lop/orders", response_model=Dict[str, Any], summary="Retrieve all LOP Orders") # Using Dict[str, Any] for flexibility
+async def list_orders_api(
+    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance)
+):
     """Retrieve all LOP Orders"""
-    if lop is None:
-        raise HTTPException(status_code=503, detail="LOPManager is not initialized. Please set required environment variables for deployment.")
     try:
-        orders = lop.list_all_orders()
+        orders = current_lop.list_all_orders()
         return {"status": "ok", "orders": orders}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list orders: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to list orders: {e}")
 
-@router.post("/lop/cancel")
-async def cancel_order_api(req: OrderIdRequest):
+@router.post("/lop/cancel", summary="Cancel LOP Order")
+async def cancel_order_api(
+    req: OrderIdRequest,
+    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance)
+):
     """Cancel LOP Order"""
-    if lop is None:
-        raise HTTPException(status_code=503, detail="LOPManager is not initialized. Please set required environment variables for deployment.")
     try:
-        result = lop.cancel_order(req.order_id)
+        result = current_lop.cancel_order(req.order_id)
+        if not result:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Order {req.order_id} not found.")
         return {"status": "ok", "canceled": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to cancel order: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to cancel order: {e}")
