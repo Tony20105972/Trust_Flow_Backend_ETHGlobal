@@ -1,260 +1,286 @@
-import sys # For sys.exit()
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
+import os
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
-# Backend modules import
-# Assuming these are directly importable from the TrustFlow package root
-# e.g., if TrustFlow is a package and these are modules within it.
-from TrustFlow import (
-    generate_contract, template_mapper, rule_checker,
-    deploy_manager, dao_manager, zk_oracle_detector,
-    ipfs_uploader, oneinch_api,
-    lop_manager # ✅ lop_manager import
-)
-
-router = APIRouter()
-
-# --- Global LOPManager Instance ---
-# This instance will be initialized once when the FastAPI server starts
-# due to its placement at the module level.
-# With the updated lop_manager.py, it will now try to read environment variables first.
-lop: Optional[lop_manager.LOPManager] = None
-
+# TrustFlow 패키지 내 상대 경로 임포트
+# 모든 모듈이 TrustFlow/ 바로 아래에 있다고 가정합니다.
+# 예를 들어, TrustFlow/api.py와 TrustFlow/dao_manager.py가 같은 폴더에 있는 경우
 try:
-    print("🚀 Attempting to initialize LOPManager in api.py...")
-    lop = lop_manager.LOPManager()
-    print("✅ LOPManager initialized successfully in api.py.")
-except ValueError as e:
-    # This catches errors from Web3Client if ENV variables are missing.
-    # On Render, this means you forgot to set environment variables.
-    print(f"🚨 FATAL ERROR: LOPManager initialization failed due to missing environment variable: {e}", file=sys.stderr)
-    lop = None
-    # In a production setup, if this is a critical dependency,
-    # you might want to terminate the application startup here.
-    # For a web server, letting it start but returning 503 on affected endpoints is also an option.
-    # If using uvicorn/gunicorn, sys.exit(1) here would prevent the server from binding.
-    # sys.exit(1) # Uncomment this if you want to hard-stop the app on startup failure.
+    from .dao_manager import DAOManager
+    from .rule_checker import check_code # check_code 래퍼 함수는 RuleChecker 인스턴스를 사용합니다.
+    from .lop_manager import LopManager
+    from .deploy_manager import DeploymentManager
+    from .zk_oracle_detector import analyze_zk_oracle # TrustFlow/utils가 아닌 TrustFlow/ 바로 아래로 수정
+    from .ipfs_uploader import upload_to_ipfs       # TrustFlow/utils가 아닌 TrustFlow/ 바로 아래로 수정
+    from .oneinch_api import oneinch_swap, oneinch_get_quote # TrustFlow/utils가 아닌 TrustFlow/ 바로 아래로 수정
+
+except ImportError as e:
+    print(f"모듈 임포트 오류: {e}")
+    print("Python 경로가 올바르게 구성되어 있는지 확인하거나 임포트 문을 조정하십시오.")
+    print("예시: TrustFlow/ (상위 디렉토리)에서 실행하는 경우, TrustFlow/가 PYTHONPATH에 포함되어 있는지 확인하십시오.")
+    raise
+
+app = FastAPI()
+
+# 글로벌 매니저 인스턴스
+try:
+    dao_manager_instance = DAOManager()
+    lop_manager_instance = LopManager()
+    deploy_manager_instance = DeploymentManager()
 except Exception as e:
-    # Catch any other unexpected errors during initialization
-    print(f"🚨 FATAL ERROR: An unexpected error occurred during LOPManager initialization: {e}", file=sys.stderr)
-    lop = None
-    # sys.exit(1) # Uncomment this if you want to hard-stop the app on startup failure.
-
-# If lop is still None after the try-except, indicate that core functionality is unavailable
-if lop is None:
-    print("⚠️ Warning: LOPManager could not be initialized. On-chain related APIs will return 503 errors.", file=sys.stderr)
+    print(f"매니저 인스턴스 초기화 실패: {e}")
+    raise
 
 
-# --- Dependency for LOPManager (to be used by LOP endpoints) ---
-async def get_lop_manager_instance():
-    """
-    Dependency injector for LOPManager.
-    Raises HTTPException 503 if LOPManager failed to initialize.
-    """
-    if lop is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="LOPManager is not initialized. Check server logs for details (missing ENV vars, Web3 connectivity)."
-        )
-    return lop
+# Pydantic 모델
+class CodeCheckRequest(BaseModel):
+    code: str
+    code_type: Optional[str] = "smart_contract" # RuleChecker의 check_code 기본값과 일치
+    target_lang: Optional[str] = "solidity"     # RuleChecker의 check_code 기본값과 일치
 
-
-# ✅ 1. Deploy API --------------------------------------
-
-class DeployRequest(BaseModel):
-    prompt: str
-    wallet_address: Optional[str] = None 
-
-@router.post("/deploy/code", summary="AI Prompt -> Solidity Code Generation & Deployment")
-async def deploy_code(data: DeployRequest):
-    """
-    1) AI Prompt -> Solidity Code Generation
-    2) RuleChecker Execution
-    3) Contract Deployment
-    4) Return TX Hash & Address
-    """
-    # 1. AI-based Solidity code generation (Mock or actual LLM integration)
-    solidity_code = generate_contract.create_contract_from_prompt(data.prompt)
-
-    # 2. Constitution-based Rule Check
-    issues = rule_checker.check_code(solidity_code)
-
-    # 3. Contract deployment (depends on external deploy_manager module)
-    try:
-        deploy_result = deploy_manager.deploy_code(solidity_code, wallet=data.wallet_address)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Contract deployment failed: {e}")
-
-    return {
-        "prompt": data.prompt,
-        "solidity_code": solidity_code,
-        "rule_issues": issues,
-        "deploy_result": deploy_result
-    }
-
-# ✅ 2. DAO API --------------------------------------
-
-class ProposalRequest(BaseModel):
+class ProposalCreateRequest(BaseModel):
     title: str
     description: str
-    wallet_address: Optional[str] = None
+    proposer_address: str
+    initial_status: str = "pending"
+    code_hash: Optional[str] = None
 
-@router.post("/dao/proposal", summary="Create DAO Proposal")
-async def create_proposal(req: ProposalRequest):
-    """
-    Create DAO Proposal
-    """
-    result = dao_manager.create_proposal(req.title, req.description, wallet=req.wallet_address)
-    return {"status": "ok", "proposal": result}
+class ProposalVoteRequest(BaseModel):
+    proposal_id: str
+    voter_address: str
+    vote_type: str # 'for', 'against', 'abstain'
 
-class VoteRequest(BaseModel):
-    proposal_id: int
-    vote: str    # "for" or "against"
-    wallet_address: Optional[str] = None
-
-@router.post("/dao/vote", summary="Vote on DAO Proposal")
-async def vote(req: VoteRequest):
-    """
-    Vote on DAO Proposal
-    """
-    result = dao_manager.vote(req.proposal_id, req.vote, wallet=req.wallet_address)
-    return {"status": "ok", "vote_result": result}
-
-# ✅ 3. ZK Oracle Detector ---------------------------
-
-class ZKDetectRequest(BaseModel):
+class DeployCodeRequest(BaseModel):
     solidity_code: str
+    constructor_args: Optional[List[Any]] = None
+    solc_version: str = "0.8.20"
+    gas_price_multiplier: float = 2.0
 
-@router.post("/zk-detect", summary="Detect ZK/Oracle/KYC in Solidity Code (Mock)")
-async def zk_detect(req: ZKDetectRequest):
-    """
-    Detect ZK/Oracle/KYC in Solidity Code
-    """
-    result = zk_oracle_detector.analyze(req.solidity_code)
-    return {"issues": result}
+class DeployTemplateRequest(BaseModel):
+    template_name: str
+    variables: Dict[str, Any]
+    solc_version: str = "0.8.20"
+    gas_price_multiplier: float = 2.0
 
-# ✅ 4. IPFS Report Upload ---------------------------
+class CallContractFunctionRequest(BaseModel):
+    contract_address: str
+    abi: List[Dict[str, Any]]
+    function_name: str
+    args: Optional[List[Any]] = None
 
-@router.post("/ipfs", summary="Upload Report File to IPFS (Mock)")
-async def upload_report(file: UploadFile = File(...)):
-    """
-    Upload Report File to IPFS
-    """
-    try:
-        ipfs_hash = ipfs_uploader.upload_file(file)
-        return {"status": "uploaded", "ipfs_hash": ipfs_hash}
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"IPFS upload failed: {e}")
+class SendContractTransactionRequest(BaseModel):
+    contract_address: str
+    abi: List[Dict[str, Any]]
+    function_name: str
+    args: Optional[List[Any]] = None
+    value: int = 0
+    gas_limit: int = 5_000_000 # Increased gas limit
+    gas_price_multiplier: float = 1.5
+    timeout_seconds: int = 300
 
-# ✅ 5. 1inch API Integration -------------------------------
 
-class SwapRequest(BaseModel):
-    from_token: str
-    to_token: str
-    amount: float
-    wallet_address: Optional[str] = None
+@app.get("/")
+async def read_root():
+    return {"message": "Samantha OS API is running!"}
 
-@router.post("/1inch/swap", summary="Call 1inch Swap API (Mock)")
-async def oneinch_swap(req: SwapRequest):
-    """
-    Call 1inch Swap API
-    """
-    try:
-        swap_result = oneinch_api.swap(req.from_token, req.to_token, req.amount, req.wallet_address)
-        return {"status": "ok", "swap": swap_result}
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"1inch swap failed: {e}")
+# --- Core API Endpoints ---
 
-@router.get("/1inch/quote", summary="Call 1inch Quote API (Mock)")
-async def oneinch_quote(from_token: str, to_token: str, amount: float):
+@app.post("/code/check")
+async def check_code_endpoint(request: CodeCheckRequest):
     """
-    Call 1inch Quote API
+    제공된 코드를 보안 취약점, 규칙 위반 및 모범 사례에 대해 분석합니다.
     """
     try:
-        quote_result = oneinch_api.get_quote(from_token, to_token, amount)
-        return {"status": "ok", "quote": quote_result}
+        # RuleChecker의 check_code 함수에 기본값이 있으므로, Pydantic 모델에서 제공되지 않으면 기본값이 사용됩니다.
+        analysis_result = check_code(
+            request.code,
+            code_type=request.code_type,
+            target_lang=request.target_lang
+        )
+        return {"status": "success", "analysis_result": analysis_result}
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"1inch quote failed: {e}")
+        raise HTTPException(status_code=500, detail=f"코드 분석 실패: {e}")
 
+@app.post("/proposals/create")
+async def create_proposal_endpoint(request: ProposalCreateRequest):
+    """
+    새로운 DAO 제안을 생성합니다.
+    """
+    try:
+        proposal_data = {
+            "title": request.title,
+            "description": request.description,
+            "proposer_address": request.proposer_address,
+            "initial_status": request.initial_status,
+            "code_hash": request.code_hash
+        }
+        proposal_id = dao_manager_instance.create_proposal(proposal_data)
+        return {"status": "success", "proposal_id": proposal_id, "message": "제안이 성공적으로 생성되었습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"제안 생성 실패: {e}")
 
-# ✅ 6. LOPManager API -------------------------------
+@app.post("/proposals/vote")
+async def vote_proposal_endpoint(request: ProposalVoteRequest):
+    """
+    특정 DAO 제안에 대한 투표를 기록합니다.
+    """
+    try:
+        dao_manager_instance.vote(request.proposal_id, request.voter_address, request.vote_type)
+        return {"status": "success", "message": f"제안 {request.proposal_id}에 대한 투표가 {request.voter_address}에 의해 기록되었습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"투표 기록 실패: {e}")
 
-from fastapi import Depends # Import Depends for dependency injection
+@app.get("/proposals/{proposal_id}")
+async def get_proposal_endpoint(proposal_id: str):
+    """
+    특정 DAO 제안의 상세 정보를 검색합니다.
+    """
+    try:
+        proposal = dao_manager_instance.get_proposal(proposal_id)
+        if not proposal:
+            raise HTTPException(status_code=404, detail="제안을 찾을 수 없습니다.")
+        return {"status": "success", "proposal": proposal}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"제안 검색 실패: {e}")
 
-class LimitOrderRequest(BaseModel):
-    prompt: str
-    from_token: str
-    to_token: str
-    amount: float
-    price: float
+@app.post("/deploy/code")
+async def deploy_code_endpoint(request: DeployCodeRequest):
+    """
+    Solidity 코드를 직접 사용하여 스마트 컨트랙트를 배포합니다.
+    """
+    try:
+        deployment_result = deploy_manager_instance.deploy_from_code(
+            request.solidity_code,
+            request.constructor_args,
+            request.solc_version,
+            request.gas_price_multiplier
+        )
+        return {"status": "success", "deployment": deployment_result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"코드로부터 컨트랙트 배포 실패: {e}")
 
-class OrderIdRequest(BaseModel): # New Pydantic model for single order_id argument
-    order_id: int
+@app.post("/deploy/template")
+async def deploy_template_endpoint(request: DeployTemplateRequest):
+    """
+    사전 정의된 템플릿으로부터 스마트 컨트랙트를 배포합니다.
+    """
+    try:
+        deployment_result = deploy_manager_instance.deploy_from_template(
+            request.template_name,
+            request.variables,
+            request.solc_version,
+            request.gas_price_multiplier
+        )
+        return {"status": "success", "deployment": deployment_result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"템플릿으로부터 컨트랙트 배포 실패: {e}")
 
-@router.post("/lop/create", summary="Create LOP Limit Order & Execute ERC20 Approval Transaction")
-async def create_limit_order_api(
-    req: LimitOrderRequest,
-    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance) # Inject the lop_manager instance
+@app.post("/contract/call")
+async def call_contract_function_endpoint(request: CallContractFunctionRequest):
+    """
+    배포된 스마트 컨트랙트의 읽기 전용 (view/pure) 함수를 호출합니다.
+    """
+    try:
+        result = deploy_manager_instance.call_contract_function(
+            request.contract_address,
+            request.abi,
+            request.function_name,
+            request.args
+        )
+        return {"status": "success", "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"컨트랙트 함수 호출 실패: {e}")
+
+@app.post("/contract/send_transaction")
+async def send_contract_transaction_endpoint(request: SendContractTransactionRequest):
+    """
+    배포된 스마트 컨트랙트의 상태 변경 함수로 트랜잭션을 전송합니다.
+    """
+    try:
+        tx_hash = deploy_manager_instance.send_contract_transaction(
+            request.contract_address,
+            request.abi,
+            request.function_name,
+            request.args,
+            request.value,
+            request.gas_limit,
+            request.gas_price_multiplier,
+            request.timeout_seconds
+        )
+        return {"status": "success", "transaction_hash": tx_hash}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"컨트랙트 트랜잭션 전송 실패: {e}")
+
+@app.post("/lop/analyze")
+async def analyze_lop_endpoint(code: str):
+    """
+    LOP (Language of Power) 코드를 분석합니다.
+    """
+    try:
+        analysis_result = lop_manager_instance.analyze_lop(code)
+        return {"status": "success", "analysis_result": analysis_result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LOP 분석 실패: {e}")
+
+@app.post("/zk_oracle/analyze")
+async def zk_oracle_analyze_endpoint(data: Dict[str, Any]):
+    """
+    Zero-Knowledge Oracle을 위한 데이터를 분석합니다.
+    """
+    try:
+        # analyze_zk_oracle은 독립형 함수로 가정합니다.
+        analysis_result = analyze_zk_oracle(data)
+        return {"status": "success", "analysis_result": analysis_result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ZK 오라클 분석 실패: {e}")
+
+@app.post("/ipfs/upload")
+async def ipfs_upload_endpoint(file_content: str, file_name: str):
+    """
+    IPFS에 콘텐츠를 업로드합니다.
+    """
+    try:
+        # upload_to_ipfs는 독립형 함수로 가정합니다.
+        cid = upload_to_ipfs(file_content, file_name)
+        return {"status": "success", "cid": cid}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"IPFS 업로드 실패: {e}")
+
+@app.post("/oneinch/swap")
+async def oneinch_swap_endpoint(
+    src_token: str,
+    dst_token: str,
+    amount: str,
+    from_address: str,
+    slippage: float = 1,
+    disable_estimate: bool = False,
+    allow_partial_fill: bool = False
 ):
-    """Create LOP Limit Order + Execute ERC20 Approval Transaction"""
+    """
+    1inch API를 사용하여 토큰 스왑을 수행합니다.
+    """
     try:
-        order = current_lop.create_limit_order(req.prompt, req.from_token, req.to_token, req.amount, req.price)
-        return {"status": "ok", "order": order}
+        # oneinch_swap은 독립형 함수로 가정합니다.
+        swap_data = oneinch_swap(src_token, dst_token, amount, from_address, slippage, disable_estimate, allow_partial_fill)
+        return {"status": "success", "swap_data": swap_data}
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create limit order: {e}")
+        raise HTTPException(status_code=500, detail=f"1inch 스왑 실패: {e}")
 
-@router.post("/lop/dao-approve", summary="Simulate DAO Pre-Approval for LOP Order")
-async def dao_approve_api(
-    req: OrderIdRequest,
-    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance)
+@app.get("/oneinch/quote")
+async def oneinch_quote_endpoint(
+    src_token: str,
+    dst_token: str,
+    amount: str
 ):
-    """Simulate DAO Pre-Approval"""
+    """
+    1inch API로부터 토큰 스왑 견적을 받습니다.
+    """
     try:
-        result = current_lop.initiate_dao_pre_approval(req.order_id)
-        if not result:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Order {req.order_id} not found.")
-        return {"status": "ok", "dao": result}
+        # oneinch_get_quote는 독립형 함수로 가정합니다.
+        quote_data = oneinch_get_quote(src_token, dst_token, amount)
+        return {"status": "success", "quote_data": quote_data}
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to initiate DAO approval: {e}")
-
-@router.post("/lop/submit", summary="On-chain LOP Order Submission and Execution Simulation")
-async def submit_order_api(
-    req: OrderIdRequest,
-    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance)
-):
-    """On-chain Order Submission and Execution Simulation"""
-    try:
-        result = current_lop.submit_order_on_chain_and_simulate_execution(req.order_id)
-        if not result or "status" not in result:
-             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Order {req.order_id} not found or submission failed to return result.")
-        if result.get("status") == "FAILED_ONCHAIN":
-             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"On-chain submission failed for order {req.order_id}: {result.get('error', 'Unknown error')}")
-        return {"status": "ok", "execution": result}
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to submit order on-chain: {e}")
-
-@router.get("/lop/orders", response_model=Dict[str, Any], summary="Retrieve all LOP Orders") # Using Dict[str, Any] for flexibility
-async def list_orders_api(
-    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance)
-):
-    """Retrieve all LOP Orders"""
-    try:
-        orders = current_lop.list_all_orders()
-        return {"status": "ok", "orders": orders}
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to list orders: {e}")
-
-@router.post("/lop/cancel", summary="Cancel LOP Order")
-async def cancel_order_api(
-    req: OrderIdRequest,
-    current_lop: lop_manager.LOPManager = Depends(get_lop_manager_instance)
-):
-    """Cancel LOP Order"""
-    try:
-        result = current_lop.cancel_order(req.order_id)
-        if not result:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Order {req.order_id} not found.")
-        return {"status": "ok", "canceled": result}
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to cancel order: {e}")
+        raise HTTPException(status_code=500, detail=f"1inch 견적 실패: {e}")
