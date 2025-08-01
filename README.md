@@ -5,7 +5,7 @@
 
 ---
 
-### ✅ **Trust\_Flow\_Backend\_ETHGlobal – README.md 초안**
+### ✅ **Trust\_Flow\_Backend\_ETHGlobal – README.md v1**
 
 ````markdown
 # ⚡ TrustFlow Backend
