@@ -12,13 +12,14 @@ try:
     from .rule_checker import check_code
     from .lop_manager import LOPManager
     from .deploy_manager import DeploymentManager
-    from .zk_oracle_detector import analyze_zk_oracle
+    # from .zk_oracle_detector import analyze_zk_oracle  # Import removed for Mock
     from .ipfs_uploader import ipfs_uploader_instance
     from .oneinch_api import oneinch_swap, oneinch_get_quote
 except ImportError as e:
     print(f"모듈 임포트 오류: {e}")
-    # 프로덕션 환경에서는 raise를 유지하고, 개발 환경에서는 로깅으로 대체 가능
-    # raise
+    # For a real deployment, you would handle this error more gracefully.
+    # For a hackathon, it's fine to let it fail if a module is missing.
+    raise
 
 # --- FastAPI App 초기화 ---
 app = FastAPI(
@@ -146,16 +147,40 @@ async def analyze_lop_endpoint(request: LopAnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LOP 분석 실패: {e}")
 
-@app.post("/zk/analyze", tags=["LOP & ZK"], summary="Analyze ZK-related Oracle code")
+# --- ✅ ZK Oracle 코드 분석 엔드포인트 (Mock 버전) ---
+@app.post("/zk/analyze", tags=["LOP & ZK"], summary="Analyze ZK-related Oracle code (Mock)")
 async def analyze_zk_oracle_endpoint(request: CodeCheckRequest):
-    try:
-        # Correctly passing a dictionary to the analyze_zk_oracle function
-        analysis_result = analyze_zk_oracle({"code": request.code})
-        return {"status": "success", "analysis_result": analysis_result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"ZK Oracle 분석 실패: {e}")
+    """
+    This endpoint is hardcoded to return mock data for demo purposes.
+    It simulates the detection of ZK, Oracle, and KYC features.
+    """
+    print("💡 [Mock] ZK/Oracle/KYC analysis called. Returning mock data.")
+    return {
+        "status": "success",
+        "analysis_result": {
+            "note": "⚠️ This is a mock analysis result for demonstration.",
+            "results": {
+                "ZK_Features": {
+                    "detected": True,
+                    "reason": "Potential use of ZK (Zero-Knowledge) proofs or related technologies detected. This may indicate features for privacy, scalability, or trust minimization.",
+                    "matched_patterns": ["zkSNARK", "verifyProof"]
+                },
+                "Oracle_Integration": {
+                    "detected": False,
+                    "reason": "Pattern not detected in the code.",
+                    "matched_patterns": []
+                },
+                "KYC_AML_Compliance": {
+                    "detected": False,
+                    "reason": "Pattern not detected in the code.",
+                    "matched_patterns": []
+                }
+            }
+        }
+    }
 
-@app.post("/zk_oracle/analyze", tags=["LOP & ZK"], summary="Alias endpoint for ZK Oracle analysis")
+# --- ✅ ZK Oracle 코드 분석 (프론트엔드용 alias route, Mock) ---
+@app.post("/zk_oracle/analyze", tags=["LOP & ZK"], summary="Alias endpoint for ZK Oracle analysis (Mock)")
 async def analyze_zk_oracle_alias(request: CodeCheckRequest):
     return await analyze_zk_oracle_endpoint(request)
 
