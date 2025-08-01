@@ -1,4 +1,3 @@
-Okay, here's the English version of the docs/hackathon-checklist.md file!
 
 ✅ Hackathon Submission Checklist
 This checklist will help you ensure all necessary components are ready and key considerations are met before submitting your project for the ETHGlobal hackathon.
