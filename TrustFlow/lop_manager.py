@@ -5,106 +5,37 @@ from datetime import datetime
 from web3 import Web3
 from eth_account import Account
 from typing import Optional, Dict, Any, List
-# Removed getpass as it implies interactive input, which we are avoiding for core setup
 
 # --- Configuration ---
-TEST_WETH_ADDRESS_SEPOLIA = "0xfFf9976782d46CC05630D1f6eB9Bc98210fBfCc5" # Example Sepolia WETH
-TEST_USDC_ADDRESS_SEPOLIA = "0x56aD9fB23C8A0B2C9030A9086A0F174a7D4E708E" # Example Dummy USDC (adjust if needed)
+# Example Sepolia addresses for demonstration.
+TEST_WETH_ADDRESS_SEPOLIA = "0xfFf9976782d46CC05630D1f6eB9Bc98210fBfCc5"
+TEST_USDC_ADDRESS_SEPOLIA = "0x56aD9fB23C8A0B2C9030A9086A0F174a7D4E708E"
 
+# Minimal ERC20 ABI to fetch token metadata (name, symbol, decimals).
 ERC20_ABI = json.loads('''
 [
-    {
-        "constant": false,
-        "inputs": [
-            {
-                "name": "_spender",
-                "type": "address"
-            },
-            {
-                "name": "_value",
-                "type": "uint256"
-            }
-        ],
-        "name": "approve",
-        "outputs": [
-            {
-                "name": "",
-                "type": "bool"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "inputs": [],
-        "name": "name",
-        "outputs": [
-            {
-                "name": "",
-                "type": "string"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "inputs": [],
-        "name": "symbol",
-        "outputs": [
-            {
-                "name": "",
-                "type": "string"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "constant": true,
-        "inputs": [],
-        "name": "decimals",
-        "outputs": [
-            {
-                "name": "",
-                "type": "uint8"
-            }
-        ],
-        "payable": false,
-        "stateMutability": "view",
-        "type": "function"
-    }
+    { "constant": false, "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "payable": false, "stateMutability": "nonpayable", "type": "function" },
+    { "constant": true, "inputs": [], "name": "name", "outputs": [{ "name": "", "type": "string" }], "payable": false, "stateMutability": "view", "type": "function" },
+    { "constant": true, "inputs": [], "name": "symbol", "outputs": [{ "name": "", "type": "string" }], "payable": false, "stateMutability": "view", "type": "function" },
+    { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint8" }], "payable": false, "stateMutability": "view", "type": "function" }
 ]
 ''')
 
+# Minimal ABI for a dummy LOP contract.
 DUMMY_LOP_ABI = json.loads('''
 [
-    {
-        "inputs": [
-            {"internalType": "address", "name": "fromToken", "type": "address"},
-            {"internalType": "address", "name": "toToken", "type": "address"},
-            {"internalType": "uint256", "name": "amount", "type": "uint256"},
-            {"internalType": "uint256", "name": "price", "type": "uint256"},
-            {"internalType": "address", "name": "maker", "type": "address"}
-        ],
-        "name": "submitLimitOrder",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    }
+    { "inputs": [{ "internalType": "address", "name": "fromToken", "type": "address" }, { "internalType": "address", "name": "toToken", "type": "address" }, { "internalType": "uint256", "name": "amount", "type": "uint256" }, { "internalType": "uint256", "name": "price", "type": "uint256" }, { "internalType": "address", "name": "maker", "type": "address" }], "name": "submitLimitOrder", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
 ]
 ''')
 
+# Hardcoded metadata for quick lookup
 TOKEN_METADATA = {
     Web3.to_checksum_address(TEST_WETH_ADDRESS_SEPOLIA): {"name": "Wrapped Ether", "symbol": "WETH", "decimals": 18},
     Web3.to_checksum_address(TEST_USDC_ADDRESS_SEPOLIA): {"name": "USD Coin", "symbol": "USDC", "decimals": 6},
 }
 
 class Web3Client:
+    """Manages Web3 connection and on-chain interactions."""
     def __init__(self):
         self.w3: Optional[Web3] = None
         self.account: Optional[Account] = None
@@ -140,7 +71,7 @@ class Web3Client:
         except ValueError as e:
             print(f"❌ Error loading private key: {e}. Ensure it is a valid hex string.")
             self.account = None
-            raise # Re-raise to halt initialization if private key is invalid
+            raise
         except Exception as e:
             print(f"❌ Unexpected error loading private key: {e}")
             self.account = None
@@ -159,7 +90,6 @@ class Web3Client:
             print(f"❌ Error: Environment variable DUMMY_LOP_CONTRACT_ADDRESS '{lop_address_input}' is not a valid Ethereum address.")
             print("❗❗ LOP contract interactions will fail. Please correct the environment variable.")
             self.lop_contract_address = Web3.to_checksum_address("0x000000000000000000000000000000000000dEaD") # Fallback to a dummy address
-
 
     def get_token_info(self, token_address: str) -> Dict[str, Any]:
         """Fetches token name, symbol, and decimals using hardcoded data or on-chain calls."""
@@ -190,10 +120,8 @@ class Web3Client:
         try:
             latest_block = self.w3.eth.get_block('latest')
             base_fee_per_gas = latest_block['baseFeePerGas']
-
-            max_priority_fee_per_gas = self.w3.to_wei(1, 'gwei') 
+            max_priority_fee_per_gas = self.w3.to_wei(1, 'gwei')
             max_fee_per_gas = (base_fee_per_gas * 2) + max_priority_fee_per_gas
-
             return {
                 'maxFeePerGas': max_fee_per_gas,
                 'maxPriorityFeePerGas': max_priority_fee_per_gas
@@ -203,10 +131,7 @@ class Web3Client:
             return {'gasPrice': self.w3.eth.gas_price} # Fallback to legacy
 
     def approve_erc20(self, token_address: str, amount: int) -> Optional[str]:
-        """
-        Approves a specific amount for a given token to the LOP contract address.
-        The spender address uses self.lop_contract_address set during Web3Client initialization.
-        """
+        """Approves a specific amount for a given token to the LOP contract address."""
         if not self.account:
             print("❌ ERC-20 Approval failed: Wallet not set for signing. Check private key error.")
             return None
@@ -219,7 +144,6 @@ class Web3Client:
 
         try:
             token_contract = self.w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
-
             token_info = self.get_token_info(token_address)
             token_name = token_info.get("name", token_address)
 
@@ -233,14 +157,9 @@ class Web3Client:
                 **gas_fees
             }
 
-            tx = token_contract.functions.approve(
-                spender_checksum_address,
-                amount
-            ).build_transaction(tx_params)
-
+            tx = token_contract.functions.approve(spender_checksum_address, amount).build_transaction(tx_params)
             signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.account.key)
             tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
             self.current_nonce += 1
 
             print(f"✅ ERC-20 Approval transaction sent: {tx_hash.hex()}")
@@ -258,10 +177,7 @@ class Web3Client:
             return None
 
     def submit_lop_order_on_chain(self, order_data: Dict[str, Any]) -> Optional[str]:
-        """
-        Submits an order to the LOP contract.
-        The LOP contract address uses self.lop_contract_address set during Web3Client initialization.
-        """
+        """Submits an order to the LOP contract."""
         if not self.account:
             print("❌ LOP Order submission failed: Wallet not set for signing. Check private key error.")
             return None
@@ -273,19 +189,14 @@ class Web3Client:
         lop_contract_checksum_address = self.lop_contract_address
 
         try:
-            lop_contract = self.w3.eth.contract(
-                address=lop_contract_checksum_address,
-                abi=DUMMY_LOP_ABI
-            )
-
+            lop_contract = self.w3.eth.contract(address=lop_contract_checksum_address, abi=DUMMY_LOP_ABI)
             from_token_address = Web3.to_checksum_address(order_data['from_token_address'])
             to_token_address = Web3.to_checksum_address(order_data['to_token_address'])
             
             from_token_info = self.get_token_info(from_token_address)
-            from_token_decimals = from_token_info.get("decimals", 18) 
-
-            amount_for_contract = int(order_data['amount'] * (10**from_token_decimals)) 
-            price_for_contract = int(order_data['price'] * (10**18)) # Price assumed to be 18 decimals like ETH
+            from_token_decimals = from_token_info.get("decimals", 18)
+            amount_for_contract = int(order_data['amount'] * (10**from_token_decimals))
+            price_for_contract = int(order_data['price'] * (10**18))
 
             print(f"Submitting Order {order_data['id']} (Sell {order_data['from_token']} → Buy {order_data['to_token']}) on-chain...")
 
@@ -307,7 +218,6 @@ class Web3Client:
 
             signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.account.key)
             tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-            
             self.current_nonce += 1
 
             print(f"✅ LOP Order transaction sent: {tx_hash.hex()}")
@@ -326,9 +236,10 @@ class Web3Client:
 
 
 class DAOManager:
+    """Mock DAO Manager for simulation purposes."""
     def __init__(self):
         self.proposals = {}
-        self.next_proposal_id = 1753926014868 
+        self.next_proposal_id = 1753926014868
 
     def create_proposal(self, order_id: int, title: str, proposer_address: str) -> Dict[str, Any]:
         proposal_id = self.next_proposal_id
@@ -354,21 +265,44 @@ class DAOManager:
             self.proposals[order_id]["status"] = "approved"
             print(f"--- (Simulated) Order {order_id} status updated to DAO_APPROVED. ---")
 
+
 class RuleChecker:
+    """Mock RuleChecker for simulation purposes."""
     def check_rules(self, solidity_code: str) -> List[Dict[str, Any]]:
         print("  [Mock] Running rule checks...")
         issues = []
         issues.append({"type": "info", "message": "No critical issues found (mock result)."})
         return issues
 
+
 class LOPManager:
+    """
+    Manages the lifecycle of Limit Orders, including code analysis and on-chain interaction.
+    Uses mock data for analysis to simplify the demo process.
+    """
     def __init__(self):
-        self.web3_client = Web3Client() 
+        self.web3_client = Web3Client()
         self.dao_manager = DAOManager()
         self.rule_checker = RuleChecker()
         self.orders: Dict[int, Dict[str, Any]] = {}
         self.next_order_id = 1
         print("💡 LOPManager initialized.")
+
+    def analyze_lop(self, code: str) -> Dict[str, Any]:
+        """
+        Mock analyzer for LOP code.
+        Returns dummy vulnerabilities for demo purposes, ensuring the UI works smoothly.
+        """
+        print(f"[LOP] Analyzing code (mock): {code[:50]}...")
+        return {
+            "issues": [
+                {"type": "info", "message": "✅ No critical issues found"},
+                {"type": "suggestion", "message": "Consider gas optimization for loop structures"},
+                {"type": "warning", "message": "Unindexed event parameters may reduce indexing efficiency"},
+                {"type": "critical", "message": "⚠️ Detected potential reentrancy vulnerability in transfer function"}
+            ],
+            "summary": "Mock analysis completed successfully."
+        }
 
     def create_limit_order(self, prompt: str, from_token: str, to_token: str, amount: float, price: float) -> Dict[str, Any]:
         order_id = self.next_order_id
@@ -507,7 +441,7 @@ if __name__ == "__main__":
                 val = input("🔐 Enter your Web3 RPC URL (e.g., Infura/Alchemy Sepolia URL): ")
             elif key == "WALLET_PRIVATE_KEY":
                 # Using standard input() for simplicity in this mock, getpass is not available here easily
-                val = input("🔐 Enter your wallet private key (input will be visible in console): ") 
+                val = input("🔐 Enter your wallet private key (input will be visible in console): ")
             elif key == "DUMMY_LOP_CONTRACT_ADDRESS":
                 val = input("🔐 Enter DUMMY LOP Contract Address (Sepolia): ")
         return val
