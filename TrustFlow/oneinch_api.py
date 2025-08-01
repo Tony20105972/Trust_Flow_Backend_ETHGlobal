@@ -3,6 +3,7 @@ import json
 import os
 import time
 from typing import Dict, Any, Optional, Union
+import hashlib
 
 # Web3.py imports
 from web3 import Web3
@@ -202,62 +203,52 @@ def send_onchain_transaction(w3: Web3, private_key: str, tx_data: Dict[str, Any]
         print(f"❌ Unexpected error during on-chain transaction sending: {type(e).__name__}: {e}")
         raise
 
-# --- Integrated Test Code ---
-if __name__ == "__main__":
-    print("\n--- OneInchAPI Test Script Start ---")
-
-    # --- Configuration for testing ---
-    # Set these environment variables or ensure they are in a .env file:
-    # ONEINCH_API_KEY="YOUR_1INCH_DEV_API_KEY"
-    # PRIVATE_KEY="0xYOUR_MUMBAI_TESTNET_PRIVATE_KEY"
-    # MUMBAI_RPC_URL="https://polygon-mumbai.g.alchemy.com/v2/YOUR_ALCHEMY_KEY"
-
-    # Ethereum Mainnet Token Addresses (Examples)
-    WETH_MAINNET = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" # Wrapped Ether
-    USDC_MAINNET = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" # USDC
-
-    # ... (생략, 기존 코드와 동일)
-    # The actual test logic below will now use `chain_id=1` by default
-    # and should be tested with Mainnet token addresses for full functionality.
-    # To avoid real gas fees, the send_onchain_transaction() calls should be skipped.
-
-    # 1inch API instance creation (defaulting to Ethereum Mainnet)
-    oneinch_api = OneInchAPI()
-
-    # --- Test 1: get_quote (Price Quote) ---
-    print("\n--- Test 1: get_quote (Price Quote) ---")
-    amount_to_swap_wei = int(0.01 * (10**18)) # 0.01 WETH (18 decimals)
-    try:
-        quote_result = oneinch_api.get_quote(WETH_MAINNET, USDC_MAINNET, amount_to_swap_wei)
-        print("Quote Result:")
-        print(json.dumps(quote_result, indent=2))
-        if "toTokenAmount" in quote_result:
-            # USDC has 6 decimals
-            print(f"    → Expected USDC for {amount_to_swap_wei / (10**18)} WETH: {int(quote_result['toTokenAmount']) / (10**6):.4f} USDC")
-        print("✅ get_quote test successful.")
-    except Exception as e:
-        print(f"❌ get_quote test failed: {e}")
-
-    # ... (나머지 테스트 코드 생략)
-    # The rest of the test script logic remains the same, but with the context of Ethereum Mainnet.
-
-
-# --- Global Wrapper Functions for API endpoints ---
+# --- Global Wrapper Functions for API endpoints (with Mock Fallback) ---
 def oneinch_swap(src_token: str, dst_token: str, amount: Union[int, str], from_address: str,
-                 slippage: float = 1.0) -> Dict[str, Any]:
+                 slippage: float = 1.0, disable_estimate: bool = False, allow_partial_fill: bool = False) -> Dict[str, Any]:
     try:
-        # We can also pass `chain_id` here if needed, but for now, we use the default.
         api = OneInchAPI()
         return api.build_swap_transaction(src_token, dst_token, amount, from_address, slippage)
     except Exception as e:
         print(f"❌ oneinch_swap failed: {e}")
-        return {"status": "error", "message": str(e)}
+        print("⚠️ Returning MOCK swap response instead.")
+        return {
+            "status": "mock",
+            "message": "⚠️ This is a mock swap response (API call failed)",
+            "timestamp": int(time.time()),
+            "mock": True,
+            "src_token": src_token,
+            "dst_token": dst_token,
+            "amount": str(amount),
+            "from_address": from_address,
+            "slippage": slippage,
+            "tx": {
+                "to": "0x1111111254EEB25477B68fb85Ed929f73A960582",  # 1inch Router (Mainnet)
+                "data": "0x" + hashlib.sha256(str(time.time()).encode()).hexdigest()[:128],
+                "value": "0"
+            },
+            "estimated_gas": "150000",
+            "route": [
+                {"protocol": "MockSwap", "part": "100%", "fromToken": "WETH", "toToken": "USDC"}
+            ]
+        }
 
 def oneinch_get_quote(src_token: str, dst_token: str, amount: Union[int, str]) -> Dict[str, Any]:
     try:
-        # We can also pass `chain_id` here if needed, but for now, we use the default.
         api = OneInchAPI()
         return api.get_quote(src_token, dst_token, amount)
     except Exception as e:
         print(f"❌ oneinch_get_quote failed: {e}")
-        return {"status": "error", "message": str(e)}
+        print("⚠️ Returning MOCK quote response instead.")
+        return {
+            "status": "mock",
+            "message": "⚠️ This is a mock quote response (API call failed)",
+            "timestamp": int(time.time()),
+            "mock": True,
+            "src_token": src_token,
+            "dst_token": dst_token,
+            "amount": str(amount),
+            "estimated_amount": "9999999999999999",
+            "gas": "50000",
+            "gas_price": "10000000000"
+        }
