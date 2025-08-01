@@ -5,11 +5,16 @@
 
 from .api import app
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
-# ✅ CORS 설정 추가 (프론트엔드 연결 문제 해결용)
+# --- CORS 설정 추가 (프론트엔드 연결 문제 해결용) ---
+# 개발 환경과 프로덕션 환경에 따라 allow_origins를 동적으로 설정
+allowed_origins_env = os.getenv("CORS_ORIGINS")
+origins = allowed_origins_env.split(',') if allowed_origins_env else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: 배포 후 samanthaos.space 등으로 제한 가능
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -22,6 +27,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     print("TrustFlow API is running! Let's explore DeFi together 🚀")
+    print(f"CORS origins configured: {origins}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
