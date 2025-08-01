@@ -1,9 +1,10 @@
 # TrustFlow/api.py
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File
+import time
+import hashlib
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-import time
 
 # --- TrustFlow 내부 모듈 임포트 ---
 try:
@@ -24,6 +25,8 @@ app = FastAPI(
     title="Samantha OS API",
     description="Backend API for Samantha OS, an AI-powered smart contract development and management platform.",
     version="0.1.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # --- 매니저 인스턴스 생성 ---
@@ -73,17 +76,15 @@ class SwapRequest(BaseModel):
 
 # --- API Routes ---
 
-@app.get("/")
+@app.get("/", summary="Root Endpoint", description="Checks if the Samantha OS API is running.")
 async def read_root():
     return {"message": "Samantha OS API is running!"}
 
-# ✅ 상태 확인용 엔드포인트 추가 (배포 환경에서 유용)
-@app.get("/health")
+@app.get("/health", summary="Health Check", description="Returns a simple status to check API health.")
 async def health_check():
     return {"status": "ok"}
 
-# ✅ 코드 보안 체크
-@app.post("/code/check", tags=["Code Analysis"])
+@app.post("/code/check", tags=["Code Analysis"], summary="Analyze Smart Contract for Security Vulnerabilities")
 async def check_code_endpoint(request: CodeCheckRequest):
     try:
         analysis_result = check_code(request.code, code_type=request.code_type, target_lang=request.target_lang)
@@ -91,7 +92,6 @@ async def check_code_endpoint(request: CodeCheckRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"코드 분석 실패: {e}")
 
-# ✅ DAO 제안 생성
 @app.post("/proposals/create", tags=["DAO Management"])
 async def create_proposal_endpoint(request: ProposalCreateRequest):
     try:
@@ -104,7 +104,6 @@ async def create_proposal_endpoint(request: ProposalCreateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DAO Proposal 생성 실패: {e}")
 
-# ✅ DAO 투표
 @app.post("/proposals/vote", tags=["DAO Management"])
 async def vote_proposal_endpoint(request: ProposalVoteRequest):
     try:
@@ -113,8 +112,7 @@ async def vote_proposal_endpoint(request: ProposalVoteRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DAO Vote 실패: {e}")
 
-# ✅ 스마트컨트랙트 직접 배포
-@app.post("/deploy/code", tags=["Contract Deployment"])
+@app.post("/deploy/code", tags=["Contract Deployment"], summary="Deploy a contract from raw Solidity code")
 async def deploy_code_endpoint(request: DeployCodeRequest):
     try:
         deployment_result = deploy_manager_instance.deploy_from_code(
@@ -127,8 +125,7 @@ async def deploy_code_endpoint(request: DeployCodeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"컨트랙트 배포 실패: {e}")
 
-# ✅ 스마트컨트랙트 템플릿 배포
-@app.post("/deploy/template", tags=["Contract Deployment"])
+@app.post("/deploy/template", tags=["Contract Deployment"], summary="Deploy a contract from a template")
 async def deploy_template_endpoint(request: DeployTemplateRequest):
     try:
         deployment_result = deploy_manager_instance.deploy_from_template(
@@ -141,7 +138,6 @@ async def deploy_template_endpoint(request: DeployTemplateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"템플릿 기반 컨트랙트 배포 실패: {e}")
 
-# ✅ LOP 코드 분석
 @app.post("/lop/analyze", tags=["LOP & ZK"])
 async def analyze_lop_endpoint(request: LopAnalyzeRequest):
     try:
@@ -150,29 +146,35 @@ async def analyze_lop_endpoint(request: LopAnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LOP 분석 실패: {e}")
 
-# ✅ ZK Oracle 코드 분석 (실제 엔드포인트)
-@app.post("/zk/analyze", tags=["LOP & ZK"])
+@app.post("/zk/analyze", tags=["LOP & ZK"], summary="Analyze ZK-related Oracle code")
 async def analyze_zk_oracle_endpoint(request: CodeCheckRequest):
     try:
-        analysis_result = analyze_zk_oracle(request.code)
+        # Correctly passing a dictionary to the analyze_zk_oracle function
+        analysis_result = analyze_zk_oracle({"code": request.code})
         return {"status": "success", "analysis_result": analysis_result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ZK Oracle 분석 실패: {e}")
 
-# ✅ ZK Oracle 코드 분석 (프론트엔드용 alias route)
-@app.post("/zk_oracle/analyze", tags=["LOP & ZK"])
+@app.post("/zk_oracle/analyze", tags=["LOP & ZK"], summary="Alias endpoint for ZK Oracle analysis")
 async def analyze_zk_oracle_alias(request: CodeCheckRequest):
     return await analyze_zk_oracle_endpoint(request)
 
-# ✅ IPFS 업로드 (FormData 방식)
-@app.post("/ipfs/upload", tags=["IPFS"])
+@app.post("/ipfs/upload", tags=["IPFS"], summary="Upload a file to IPFS (Mock)")
 async def ipfs_upload_endpoint(file: UploadFile = File(...)):
     print("💡 [Mock] IPFS upload called. Returning mock CID.")
-    cid = f"mock_cid_{int(time.time())}"
-    return {"status": "success", "cid": cid, "note": "⚠️ Mock response (not uploaded to real IPFS)"}
+    
+    file_bytes = await file.read()
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    cid = f"bafy{file_hash[:50]}"
+    
+    return {
+        "status": "success",
+        "cid": cid,
+        "file_name": file.filename,
+        "note": "⚠️ Mock response (not uploaded to real IPFS)"
+    }
 
-# ✅ 1inch 토큰 스왑 (POST 요청)
-@app.post("/oneinch/swap", tags=["1inch API"])
+@app.post("/oneinch/swap", tags=["1inch API"], summary="Perform a token swap on 1inch (POST)")
 async def oneinch_swap_endpoint(request: SwapRequest):
     try:
         swap_data = oneinch_swap(
@@ -188,19 +190,36 @@ async def oneinch_swap_endpoint(request: SwapRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"1inch Swap 실패: {e}")
 
-# ✅ 1inch 토큰 스왑 (GET 요청)
-@app.get("/oneinch/swap", tags=["1inch API"])
-async def oneinch_swap_get_endpoint(src_token: str, dst_token: str, amount: str, from_address: str, slippage: float = 1):
+@app.get("/oneinch/swap", tags=["1inch API"], summary="Perform a token swap on 1inch (GET)")
+async def oneinch_swap_get_endpoint(
+    src_token: str = Query(..., description="Source token address"),
+    dst_token: str = Query(..., description="Destination token address"),
+    amount: str = Query(..., description="Amount of source token to swap"),
+    from_address: str = Query(..., description="Address of the swapper"),
+    slippage: float = Query(1.0, description="Slippage tolerance in percent"),
+    disable_estimate: bool = Query(False, description="Disable gas estimate"),
+    allow_partial_fill: bool = Query(False, description="Allow partial fill")
+):
     try:
-        swap_data = oneinch_swap(src_token, dst_token, amount, from_address, slippage)
+        swap_data = oneinch_swap(
+            src_token=src_token,
+            dst_token=dst_token,
+            amount=amount,
+            from_address=from_address,
+            slippage=slippage,
+            disable_estimate=disable_estimate,
+            allow_partial_fill=allow_partial_fill
+        )
         return {"status": "success", "swap_data": swap_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"1inch Swap 실패: {e}")
 
-
-# ✅ 1inch Quote
-@app.get("/oneinch/quote", tags=["1inch API"])
-async def oneinch_quote_endpoint(src_token: str, dst_token: str, amount: str):
+@app.get("/oneinch/quote", tags=["1inch API"], summary="Get a quote for a token swap")
+async def oneinch_quote_endpoint(
+    src_token: str = Query(..., description="Source token address"),
+    dst_token: str = Query(..., description="Destination token address"),
+    amount: str = Query(..., description="Amount of source token to get a quote for")
+):
     try:
         quote_data = oneinch_get_quote(src_token, dst_token, amount)
         return {"status": "success", "quote_data": quote_data}
