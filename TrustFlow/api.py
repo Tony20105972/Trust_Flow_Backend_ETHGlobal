@@ -3,6 +3,7 @@ import os
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+import time
 
 # --- TrustFlow 내부 모듈 임포트 ---
 try:
@@ -149,7 +150,7 @@ async def analyze_lop_endpoint(request: LopAnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LOP 분석 실패: {e}")
 
-# ✅ ZK Oracle 코드 분석 (더미)
+# ✅ ZK Oracle 코드 분석 (실제 엔드포인트)
 @app.post("/zk/analyze", tags=["LOP & ZK"])
 async def analyze_zk_oracle_endpoint(request: CodeCheckRequest):
     try:
@@ -158,18 +159,19 @@ async def analyze_zk_oracle_endpoint(request: CodeCheckRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ZK Oracle 분석 실패: {e}")
 
+# ✅ ZK Oracle 코드 분석 (프론트엔드용 alias route)
+@app.post("/zk_oracle/analyze", tags=["LOP & ZK"])
+async def analyze_zk_oracle_alias(request: CodeCheckRequest):
+    return await analyze_zk_oracle_endpoint(request)
 
 # ✅ IPFS 업로드 (FormData 방식)
 @app.post("/ipfs/upload", tags=["IPFS"])
 async def ipfs_upload_endpoint(file: UploadFile = File(...)):
-    try:
-        file_bytes = await file.read()
-        cid = ipfs_uploader_instance.upload_bytes(file_bytes, file.filename)
-        return {"status": "success", "cid": cid}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"IPFS 업로드 실패: {e}")
+    print("💡 [Mock] IPFS upload called. Returning mock CID.")
+    cid = f"mock_cid_{int(time.time())}"
+    return {"status": "success", "cid": cid, "note": "⚠️ Mock response (not uploaded to real IPFS)"}
 
-# ✅ 1inch 토큰 스왑
+# ✅ 1inch 토큰 스왑 (POST 요청)
 @app.post("/oneinch/swap", tags=["1inch API"])
 async def oneinch_swap_endpoint(request: SwapRequest):
     try:
@@ -185,6 +187,16 @@ async def oneinch_swap_endpoint(request: SwapRequest):
         return {"status": "success", "swap_data": swap_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"1inch Swap 실패: {e}")
+
+# ✅ 1inch 토큰 스왑 (GET 요청)
+@app.get("/oneinch/swap", tags=["1inch API"])
+async def oneinch_swap_get_endpoint(src_token: str, dst_token: str, amount: str, from_address: str, slippage: float = 1):
+    try:
+        swap_data = oneinch_swap(src_token, dst_token, amount, from_address, slippage)
+        return {"status": "success", "swap_data": swap_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"1inch Swap 실패: {e}")
+
 
 # ✅ 1inch Quote
 @app.get("/oneinch/quote", tags=["1inch API"])
